@@ -44,6 +44,9 @@ public partial class RadialMenuWindow : Window
         MouseMove += OnWindowMouseMove;
         MouseLeftButtonUp += OnWindowMouseLeftButtonUp;
 
+        // Clean dismissal on focus loss
+        Deactivated += (_, _) => DismissMenu();
+
         // Apply dark/light theme changes
         ThemeManager.ThemeChanged += () =>
         {

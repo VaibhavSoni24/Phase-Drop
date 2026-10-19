@@ -7,7 +7,9 @@ Unicode True
 RequestExecutionLevel user ; Per-user installation to prevent admin profile mismatch
 
 !define PRODUCT_NAME "Phase Drop"
+!ifndef PRODUCT_VERSION
 !define PRODUCT_VERSION "1.0.0"
+!endif
 !define PRODUCT_PUBLISHER "Phase Drop Contributors"
 !define PRODUCT_WEB_SITE "https://github.com/VaibhavSoni24/Phase-Drop"
 !define PRODUCT_DIR_REGKEY "Software\PhaseDrop"
@@ -42,6 +44,7 @@ Page custom ThemePageCreate ThemePageLeave
 !define MUI_FINISHPAGE_SHOWREADME ""
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Start Phase Drop automatically when logging into Windows"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION EnableStartupShortcut
+!define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller Pages
@@ -58,7 +61,6 @@ Var RadioSystem
 Var RadioDark
 Var RadioLight
 Var SelectedTheme
-Var HwndStartup
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "..\..\dist\PhaseDrop-Setup-v${PRODUCT_VERSION}-x64.exe"
@@ -128,21 +130,23 @@ Section "MainSection" SEC01
     CreateShortcut "$SMPROGRAMS\Phase Drop\Uninstall Phase Drop.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
     CreateShortcut "$DESKTOP\Phase Drop.lnk" "$INSTDIR\PhaseDrop.exe" "" "$INSTDIR\Assets\icon.ico" 0
 
-    ; Write Initial Theme into User Settings JSON (%LOCALAPPDATA%\PhaseDrop\settings.json)
-    CreateDirectory "$LOCALAPPDATA\PhaseDrop"
-    FileOpen $0 "$LOCALAPPDATA\PhaseDrop\settings.json" w
-    FileWrite $0 "{\r\n"
-    FileWrite $0 '  "Theme": "$SelectedTheme",$\r$\n'
-    FileWrite $0 '  "CustomOutputDirectory": null,$\r$\n'
-    FileWrite $0 '  "MaxConcurrency": 4,$\r$\n'
-    FileWrite $0 '  "LaunchAtStartup": false,$\r$\n'
-    FileWrite $0 '  "ShowNotifications": true,$\r$\n'
-    FileWrite $0 '  "KeepOriginalsSafe": true,$\r$\n'
-    FileWrite $0 '  "DragHorizontalThreshold": 4,$\r$\n'
-    FileWrite $0 '  "DragVerticalThreshold": 4,$\r$\n'
-    FileWrite $0 '  "ShowWelcomeOnStartup": false$\r$\n'
-    FileWrite $0 "}$\r$\n"
-    FileClose $0
+    ; Write Initial Theme into User Settings JSON ONLY if not already existing (preserve existing configuration during upgrade)
+    IfFileExists "$LOCALAPPDATA\PhaseDrop\settings.json" SettingsExist
+        CreateDirectory "$LOCALAPPDATA\PhaseDrop"
+        FileOpen $0 "$LOCALAPPDATA\PhaseDrop\settings.json" w
+        FileWrite $0 "{\r\n"
+        FileWrite $0 '  "Theme": "$SelectedTheme",$\r$\n'
+        FileWrite $0 '  "CustomOutputDirectory": null,$\r$\n'
+        FileWrite $0 '  "MaxConcurrency": 4,$\r$\n'
+        FileWrite $0 '  "LaunchAtStartup": false,$\r$\n'
+        FileWrite $0 '  "ShowNotifications": true,$\r$\n'
+        FileWrite $0 '  "KeepOriginalsSafe": true,$\r$\n'
+        FileWrite $0 '  "DragHorizontalThreshold": 4,$\r$\n'
+        FileWrite $0 '  "DragVerticalThreshold": 4,$\r$\n'
+        FileWrite $0 '  "ShowWelcomeOnStartup": false$\r$\n'
+        FileWrite $0 "}$\r$\n"
+        FileClose $0
+    SettingsExist:
 
     ; Create Uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
