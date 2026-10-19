@@ -60,6 +60,70 @@ public class DocumentConversionEngineTests : IDisposable
         Assert.Contains("<td>Alice</td>", html);
     }
 
+    [Fact]
+    public async Task Convert_Rfc4180CsvWithEmbeddedNewlinesAndEscapedQuotes_ParsesCorrectly()
+    {
+        string complexCsvPath = Path.Combine(_testDir, "complex.csv");
+        // Row 1: Alice has an embedded newline in Notes, Bob has an escaped quote and comma in Role
+        string csvContent = "Name,Role,Notes\n" +
+                            "\"Alice\",\"Dev\",\"Line 1\nLine 2\"\n" +
+                            "\"Bob\",\"\"\"Senior\"\", Lead\",\"Single line notes\"\n";
+        File.WriteAllText(complexCsvPath, csvContent);
+
+        var op = new FileOperation("convert:json", "JSON", ".json", OperationCategory.Document);
+        var job = new ConversionJob([complexCsvPath], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string json = File.ReadAllText(result.OutputFiles[0]);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        Assert.Equal(2, root.GetArrayLength());
+        // Verify Alice's notes preserved embedded newline
+        Assert.Equal("Line 1\nLine 2", root[0].GetProperty("Notes").GetString());
+        // Verify Bob's role has unescaped quotes and comma
+        Assert.Equal("\"Senior\", Lead", root[1].GetProperty("Role").GetString());
+    }
+
+    [Fact]
+    public async Task Convert_JsonToCsv_PreservesDeterministicHeaderOrder()
+    {
+        string jsonPath = Path.Combine(_testDir, "deterministic.json");
+        string jsonContent = "[{\"Zebra\": 1, \"Alpha\": 2, \"Beta\": 3}, {\"Alpha\": 4, \"Beta\": 5, \"Gamma\": 6}]";
+        File.WriteAllText(jsonPath, jsonContent);
+
+        var op = new FileOperation("convert:csv", "CSV", ".csv", OperationCategory.Document);
+        var job = new ConversionJob([jsonPath], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string csv = File.ReadAllText(result.OutputFiles[0]);
+        string[] lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        // Headers must appear in encounter order: Zebra, Alpha, Beta, Gamma
+        Assert.Equal("Zebra,Alpha,Beta,Gamma", lines[0]);
+    }
+
+    [Fact]
+    public async Task Convert_CsvToHtml_EscapesUntrustedHtmlEntities()
+    {
+        string maliciousCsvPath = Path.Combine(_testDir, "malicious.csv");
+        File.WriteAllText(maliciousCsvPath, "Tag,Payload\nDanger,\"<script>alert('xss')</script> & <b>bold</b>\"\n");
+
+        var op = new FileOperation("convert:html", "HTML", ".html", OperationCategory.Document);
+        var job = new ConversionJob([maliciousCsvPath], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string html = File.ReadAllText(result.OutputFiles[0]);
+        Assert.DoesNotContain("<script>", html);
+        Assert.Contains("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt; &amp; &lt;b&gt;bold&lt;/b&gt;", html);
+    }
+
     public void Dispose()
     {
         try
