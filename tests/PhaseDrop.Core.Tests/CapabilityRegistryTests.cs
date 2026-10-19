@@ -46,4 +46,25 @@ public class CapabilityRegistryTests
         Assert.NotNull(op);
         Assert.Equal("PNG", op.DisplayName);
     }
+
+    [Fact]
+    public void GetConversions_Pdf_DoesNotOfferUnsupportedRasterization_AndOffersArchives()
+    {
+        var conversions = CapabilityRegistry.GetConversions(["sample.pdf"]);
+        Assert.NotEmpty(conversions);
+        // Ensure no fake rasterization claims
+        Assert.DoesNotContain(conversions, op => op.Id == "convert:png");
+        Assert.DoesNotContain(conversions, op => op.Id == "convert:jpg");
+        // Ensure genuine archive options
+        Assert.Contains(conversions, op => op.Id == "convert:zip");
+        Assert.Contains(conversions, op => op.Id == "convert:7z");
+
+        // Verify PDF tools are genuine
+        var tools = CapabilityRegistry.GetTools(["sample.pdf"]);
+        Assert.Contains(tools, op => op.Id == "tool:merge_pdf");
+        Assert.Contains(tools, op => op.Id == "tool:split_pdf");
+        Assert.Contains(tools, op => op.Id == "tool:extract_pages");
+        Assert.Contains(tools, op => op.Id == "tool:rotate_pages");
+        Assert.Contains(tools, op => op.Id == "tool:strip_metadata");
+    }
 }

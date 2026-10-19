@@ -112,8 +112,8 @@ public static class CapabilityRegistry
                 new("convert:opus", "Opus", ".opus", OperationCategory.Audio, false, "AudioOpus", "State of the art Opus audio", false)
             ],
             OperationCategory.Pdf => [
-                new("convert:png", "PNG Pages", ".png", OperationCategory.Pdf, false, "ImagePng", "Export PDF pages to individual PNG images", true),
-                new("convert:jpg", "JPEG Pages", ".jpg", OperationCategory.Pdf, false, "ImageJpg", "Export PDF pages to compressed JPEG images", false)
+                new("convert:zip", "ZIP", ".zip", OperationCategory.Archive, false, "ArchiveZip", "Compress PDF into ZIP archive", true),
+                new("convert:7z", "7-Zip", ".7z", OperationCategory.Archive, false, "Archive7z", "Compress PDF into 7z archive", true)
             ],
             OperationCategory.Archive => [
                 new("convert:zip", "ZIP", ".zip", OperationCategory.Archive, false, "ArchiveZip", "Standard cross-platform ZIP archive", true),
