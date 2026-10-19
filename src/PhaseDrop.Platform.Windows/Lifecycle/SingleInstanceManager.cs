@@ -17,6 +17,7 @@ public sealed class SingleInstanceManager : IDisposable
     private EventWaitHandle? _showEvent;
     private EventWaitHandle? _openEvent;
     private readonly CancellationTokenSource _cts = new();
+    private Thread? _thread;
     private bool _isPrimary;
 
     public bool IsPrimary => _isPrimary;
@@ -46,12 +47,12 @@ public sealed class SingleInstanceManager : IDisposable
         _openEvent = new EventWaitHandle(false, EventResetMode.AutoReset, OpenEventName);
 
         // Start listening thread
-        var thread = new Thread(ListenForSecondaryInstances)
+        _thread = new Thread(ListenForSecondaryInstances)
         {
             IsBackground = true,
             Name = "PhaseDrop_IPC_Listener"
         };
-        thread.Start();
+        _thread.Start();
 
         return true;
     }
@@ -88,22 +89,33 @@ public sealed class SingleInstanceManager : IDisposable
 
     private void ListenForSecondaryInstances()
     {
-        var waitHandles = new WaitHandle[] { _cts.Token.WaitHandle, _showEvent!, _openEvent! };
-
-        while (!_cts.IsCancellationRequested)
+        try
         {
-            int index = WaitHandle.WaitAny(waitHandles);
-            if (index == 0) // Cancellation
-                break;
+            var waitHandles = new WaitHandle[] { _cts.Token.WaitHandle, _showEvent!, _openEvent! };
 
-            if (index == 1) // Show event
+            while (!_cts.IsCancellationRequested)
             {
-                ShowRequested?.Invoke();
+                int index = WaitHandle.WaitAny(waitHandles);
+                if (index == 0) // Cancellation
+                    break;
+
+                if (index == 1) // Show event
+                {
+                    ShowRequested?.Invoke();
+                }
+                else if (index == 2) // Open files event
+                {
+                    ProcessInbox();
+                }
             }
-            else if (index == 2) // Open files event
-            {
-                ProcessInbox();
-            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Clean exit on disposal
+        }
+        catch (OperationCanceledException)
+        {
+            // Clean exit on cancellation
         }
     }
 
@@ -142,7 +154,17 @@ public sealed class SingleInstanceManager : IDisposable
 
     public void Dispose()
     {
-        _cts.Cancel();
+        try
+        {
+            _cts.Cancel();
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        _thread?.Join(500);
+
         _cts.Dispose();
         _showEvent?.Dispose();
         _openEvent?.Dispose();
