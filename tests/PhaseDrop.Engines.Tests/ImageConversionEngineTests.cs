@@ -84,6 +84,54 @@ public class ImageConversionEngineTests : IDisposable
         Assert.Equal(120, decoder.Frames[0].PixelHeight);
     }
 
+    [Fact]
+    public async Task Convert_UnsupportedFormat_ThrowsNotSupportedException()
+    {
+        var op = new FileOperation("convert:xyz", "XYZ", ".xyz", OperationCategory.Image);
+        var job = new ConversionJob([_sourcePng], op, _testDir);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Convert_PngWithAlphaToJpeg_FlattensAlphaOntoWhiteBackground()
+    {
+        string transparentPng = Path.Combine(_testDir, "transparent.png");
+        // Create 50x50 PNG with 50% alpha
+        int width = 50, height = 50;
+        int rawStride = (width * 32 + 7) / 8;
+        byte[] rawPixels = new byte[rawStride * height];
+        for (int i = 0; i < rawPixels.Length; i += 4)
+        {
+            rawPixels[i] = 120;     // Blue
+            rawPixels[i + 1] = 10;  // Green
+            rawPixels[i + 2] = 200; // Red
+            rawPixels[i + 3] = 128; // 50% Alpha
+        }
+        var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, rawPixels, rawStride);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using (var fs = File.Create(transparentPng))
+        {
+            encoder.Save(fs);
+        }
+
+        var op = new FileOperation("convert:jpg", "JPEG", ".jpg", OperationCategory.Image);
+        var job = new ConversionJob([transparentPng], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string outputJpg = result.OutputFiles[0];
+        Assert.True(File.Exists(outputJpg));
+
+        using var stream = File.OpenRead(outputJpg);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        Assert.Equal(50, decoder.Frames[0].PixelWidth);
+        Assert.Equal(50, decoder.Frames[0].PixelHeight);
+    }
+
     private static void CreateSamplePng(string path, int width, int height)
     {
         int rawStride = (width * 32 + 7) / 8;
