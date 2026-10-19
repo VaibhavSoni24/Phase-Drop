@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\..\assets\branding\icon.ico</ApplicationIcon>
+    <AssemblyName>PhaseDrop</AssemblyName>
+    <RootNamespace>PhaseDrop.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhaseDrop.Core\PhaseDrop.Core.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Infrastructure\PhaseDrop.Infrastructure.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Platform.Windows\PhaseDrop.Platform.Windows.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Engines.Images\PhaseDrop.Engines.Images.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Engines.Media\PhaseDrop.Engines.Media.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Engines.Pdf\PhaseDrop.Engines.Pdf.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Engines.Archives\PhaseDrop.Engines.Archives.csproj" />
+    <ProjectReference Include="..\PhaseDrop.Engines.Documents\PhaseDrop.Engines.Documents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\branding\logo.png" Link="Assets\logo.png" />
+    <Resource Include="..\..\assets\branding\icon.ico" Link="Assets\icon.ico" />
+  </ItemGroup>
+
+</Project>

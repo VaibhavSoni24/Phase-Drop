@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PhaseDrop.App/PhaseDrop.App.csproj" />
+    <Project Path="src/PhaseDrop.Core/PhaseDrop.Core.csproj" />
+    <Project Path="src/PhaseDrop.Engines.Archives/PhaseDrop.Engines.Archives.csproj" />
+    <Project Path="src/PhaseDrop.Engines.Documents/PhaseDrop.Engines.Documents.csproj" />
+    <Project Path="src/PhaseDrop.Engines.Images/PhaseDrop.Engines.Images.csproj" />
+    <Project Path="src/PhaseDrop.Engines.Media/PhaseDrop.Engines.Media.csproj" />
+    <Project Path="src/PhaseDrop.Engines.Pdf/PhaseDrop.Engines.Pdf.csproj" />
+    <Project Path="src/PhaseDrop.Infrastructure/PhaseDrop.Infrastructure.csproj" />
+    <Project Path="src/PhaseDrop.Platform.Windows/PhaseDrop.Platform.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PhaseDrop.Core.Tests/PhaseDrop.Core.Tests.csproj" />
+    <Project Path="tests/PhaseDrop.Engines.Tests/PhaseDrop.Engines.Tests.csproj" />
+    <Project Path="tests/PhaseDrop.Infrastructure.Tests/PhaseDrop.Infrastructure.Tests.csproj" />
+    <Project Path="tests/PhaseDrop.IntegrationTests/PhaseDrop.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
