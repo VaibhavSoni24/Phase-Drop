@@ -212,6 +212,68 @@ public class ArchiveConversionEngineTests : IDisposable
         Assert.True(File.Exists(file2));
     }
 
+    [Fact]
+    public async Task Extract_CorruptArchiveFile_ThrowsExceptionAndCleansUp()
+    {
+        string corruptZip = Path.Combine(_testDir, "corrupted.zip");
+        File.WriteAllText(corruptZip, "This is not a valid zip archive file contents");
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([corruptZip], extractOp, _testDir);
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Extract_InvalidCharactersInEntry_ThrowsSecurityException()
+    {
+        string invalidZip = Path.Combine(_testDir, "invalid_chars.zip");
+        using (var fs = File.Create(invalidZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("invalid*name?.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("dangerous content");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([invalidZip], extractOp, _testDir);
+
+        await Assert.ThrowsAsync<System.Security.SecurityException>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Extract_Failure_DoesNotDeletePreexistingUserFolder()
+    {
+        // Pre-create an existing user folder
+        string preExistingFolder = Path.Combine(_testDir, "malicious_slip");
+        Directory.CreateDirectory(preExistingFolder);
+        string userFile = Path.Combine(preExistingFolder, "user_data.txt");
+        File.WriteAllText(userFile, "Important user document");
+
+        string slipZip = Path.Combine(_testDir, "malicious_slip.zip");
+        using (var fs = File.Create(slipZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("../escaped.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("escape");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([slipZip], extractOp, _testDir);
+
+        await Assert.ThrowsAsync<System.Security.SecurityException>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+
+        // Pre-existing user folder and file must remain intact
+        Assert.True(Directory.Exists(preExistingFolder));
+        Assert.True(File.Exists(userFile));
+        Assert.Equal("Important user document", File.ReadAllText(userFile));
+    }
+
     public void Dispose()
     {
         try

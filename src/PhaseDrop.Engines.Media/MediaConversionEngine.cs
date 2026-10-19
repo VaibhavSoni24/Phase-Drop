@@ -41,30 +41,77 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
     public async Task<TimeSpan?> ProbeDurationAsync(string filePath)
     {
-        string? binary = _ffprobePath ?? _ffmpegPath;
-        if (string.IsNullOrEmpty(binary) || !File.Exists(binary) || !File.Exists(filePath))
+        if (!File.Exists(filePath)) return null;
+
+        // 1. Try structured duration via ffprobe
+        if (!string.IsNullOrEmpty(_ffprobePath) && File.Exists(_ffprobePath))
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _ffprobePath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                psi.ArgumentList.Add("-v");
+                psi.ArgumentList.Add("error");
+                psi.ArgumentList.Add("-show_entries");
+                psi.ArgumentList.Add("format=duration");
+                psi.ArgumentList.Add("-of");
+                psi.ArgumentList.Add("default=noprint_wrappers=1:nokey=1");
+                psi.ArgumentList.Add(filePath);
+
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+                    await Task.WhenAll(stdoutTask, stderrTask);
+                    await process.WaitForExitAsync();
+
+                    string output = (await stdoutTask).Trim();
+                    if (double.TryParse(output, NumberStyles.Float, CultureInfo.InvariantCulture, out double durationSec) && durationSec > 0)
+                    {
+                        return TimeSpan.FromSeconds(durationSec);
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to ffmpeg stderr parsing
+            }
+        }
+
+        // 2. Fallback to ffmpeg -i stderr parsing
+        string? fallback = _ffmpegPath ?? _ffprobePath;
+        if (string.IsNullOrEmpty(fallback) || !File.Exists(fallback))
             return null;
 
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = binary,
+                FileName = fallback,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true
             };
-
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add(filePath);
 
             using var process = Process.Start(psi);
             if (process == null) return null;
 
-            string stderr = await process.StandardError.ReadToEndAsync();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(stdoutTask, stderrTask);
             await process.WaitForExitAsync();
 
+            string stderr = await stderrTask;
             var match = Regex.Match(stderr, @"Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)");
             if (match.Success &&
                 int.TryParse(match.Groups[1].Value, out int hours) &&
@@ -84,31 +131,153 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
     public async Task<bool> HasAudioStreamAsync(string filePath)
     {
-        string? binary = _ffprobePath ?? _ffmpegPath;
-        if (string.IsNullOrEmpty(binary) || !File.Exists(binary) || !File.Exists(filePath))
+        if (!File.Exists(filePath)) return false;
+
+        if (!string.IsNullOrEmpty(_ffprobePath) && File.Exists(_ffprobePath))
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _ffprobePath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                psi.ArgumentList.Add("-v");
+                psi.ArgumentList.Add("error");
+                psi.ArgumentList.Add("-select_streams");
+                psi.ArgumentList.Add("a");
+                psi.ArgumentList.Add("-show_entries");
+                psi.ArgumentList.Add("stream=codec_type");
+                psi.ArgumentList.Add("-of");
+                psi.ArgumentList.Add("csv=p=0");
+                psi.ArgumentList.Add(filePath);
+
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+                    await Task.WhenAll(stdoutTask, stderrTask);
+                    await process.WaitForExitAsync();
+
+                    string outText = await stdoutTask;
+                    return outText.Contains("audio", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                // Fallback to ffmpeg
+            }
+        }
+
+        string? fallback = _ffmpegPath ?? _ffprobePath;
+        if (string.IsNullOrEmpty(fallback) || !File.Exists(fallback))
             return false;
 
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = binary,
+                FileName = fallback,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true
             };
-
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add(filePath);
 
             using var process = Process.Start(psi);
             if (process == null) return false;
 
-            string stderr = await process.StandardError.ReadToEndAsync();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(stdoutTask, stderrTask);
             await process.WaitForExitAsync();
 
+            string stderr = await stderrTask;
             return stderr.Contains("Audio:", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> HasVideoStreamAsync(string filePath)
+    {
+        if (!File.Exists(filePath)) return false;
+
+        if (!string.IsNullOrEmpty(_ffprobePath) && File.Exists(_ffprobePath))
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _ffprobePath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                psi.ArgumentList.Add("-v");
+                psi.ArgumentList.Add("error");
+                psi.ArgumentList.Add("-select_streams");
+                psi.ArgumentList.Add("v");
+                psi.ArgumentList.Add("-show_entries");
+                psi.ArgumentList.Add("stream=codec_type");
+                psi.ArgumentList.Add("-of");
+                psi.ArgumentList.Add("csv=p=0");
+                psi.ArgumentList.Add(filePath);
+
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+                    await Task.WhenAll(stdoutTask, stderrTask);
+                    await process.WaitForExitAsync();
+
+                    string outText = await stdoutTask;
+                    return outText.Contains("video", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        string? fallback = _ffmpegPath ?? _ffprobePath;
+        if (string.IsNullOrEmpty(fallback) || !File.Exists(fallback))
+            return false;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fallback,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(filePath);
+
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(stdoutTask, stderrTask);
+            await process.WaitForExitAsync();
+
+            string stderr = await stderrTask;
+            return stderr.Contains("Video:", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -254,7 +423,10 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         int totalItems,
         CancellationToken cancellationToken)
     {
+        ValidateToolParameters(operation.Id, parameters);
+
         bool hasAudio = await HasAudioStreamAsync(sourcePath);
+        bool hasVideo = await HasVideoStreamAsync(sourcePath);
 
         var psi = new ProcessStartInfo
         {
@@ -426,7 +598,7 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             double speed = parameters?["speed"]?.GetValue<double>() ?? 1.5;
             double pts = 1.0 / speed;
 
-            if (hasAudio)
+            if (hasVideo && hasAudio)
             {
                 psi.ArgumentList.Add("-filter_complex");
                 psi.ArgumentList.Add(FormattableString.Invariant($"[0:v]setpts={pts:F4}*PTS[v];[0:a]atempo={speed:F2}[a]"));
@@ -435,10 +607,15 @@ public sealed partial class MediaConversionEngine : IConversionEngine
                 psi.ArgumentList.Add("-map");
                 psi.ArgumentList.Add("[a]");
             }
-            else
+            else if (hasVideo)
             {
                 psi.ArgumentList.Add("-vf");
                 psi.ArgumentList.Add(FormattableString.Invariant($"setpts={pts:F4}*PTS"));
+            }
+            else if (hasAudio)
+            {
+                psi.ArgumentList.Add("-af");
+                psi.ArgumentList.Add(FormattableString.Invariant($"atempo={speed:F2}"));
             }
         }
         else if (operation.Id == "tool:normalize")
@@ -496,6 +673,11 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             psi.ArgumentList.Add("libwebp");
             psi.ArgumentList.Add("-quality");
             psi.ArgumentList.Add(parameters?["quality"]?.GetValue<string>() ?? "85");
+            if (hasVideo)
+            {
+                psi.ArgumentList.Add("-vframes");
+                psi.ArgumentList.Add("1");
+            }
         }
 
         // Output destination
@@ -503,6 +685,9 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
         using var process = new Process { StartInfo = psi };
         var errorBuilder = new System.Text.StringBuilder();
+
+        // Safely drain stdout to prevent deadlocks
+        process.OutputDataReceived += (_, _) => { };
 
         process.ErrorDataReceived += (_, e) =>
         {
@@ -531,9 +716,14 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         };
 
         process.Start();
+        process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        using var reg = cancellationToken.Register(() =>
+        // 10-minute timeout safeguard for stuck or runaway transcodes
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        using var reg = linkedCts.Token.Register(() =>
         {
             try
             {
@@ -546,7 +736,14 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             }
         });
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(linkedCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"FFmpeg processing timed out after 10 minutes for {Path.GetFileName(sourcePath)}.");
+        }
 
         if (process.ExitCode != 0)
         {
@@ -556,14 +753,116 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         }
     }
 
+    private static void ValidateToolParameters(string operationId, JsonObject? parameters)
+    {
+        if (parameters == null) return;
+
+        if (operationId == "tool:trim")
+        {
+            string? startStr = parameters["start"]?.GetValue<string>();
+            string? durationStr = parameters["duration"]?.GetValue<string>();
+            string? endStr = parameters["end"]?.GetValue<string>();
+
+            double? startSec = ParseTimeStringToSeconds(startStr);
+            double? durSec = ParseTimeStringToSeconds(durationStr);
+            double? endSec = ParseTimeStringToSeconds(endStr);
+
+            if (startSec.HasValue && startSec.Value < 0)
+                throw new ArgumentException("Trim start time cannot be negative.");
+
+            if (durSec.HasValue && durSec.Value <= 0)
+                throw new ArgumentException("Trim duration must be positive.");
+
+            if (endSec.HasValue && startSec.HasValue && endSec.Value <= startSec.Value)
+                throw new ArgumentException("Trim end time must be greater than start time.");
+        }
+        else if (operationId is "convert:gif" or "tool:to_gif")
+        {
+            if (parameters["fps"] != null)
+            {
+                int fps = parameters["fps"]!.GetValue<int>();
+                if (fps is < 1 or > 60)
+                    throw new ArgumentOutOfRangeException(nameof(parameters), "GIF frame rate must be between 1 and 60 fps.");
+            }
+            if (parameters["width"] != null)
+            {
+                int width = parameters["width"]!.GetValue<int>();
+                if (width is < 16 or > 3840)
+                    throw new ArgumentOutOfRangeException(nameof(parameters), "GIF width must be between 16 and 3840 pixels.");
+            }
+        }
+        else if (operationId == "tool:speed")
+        {
+            if (parameters["speed"] != null)
+            {
+                double speed = parameters["speed"]!.GetValue<double>();
+                if (speed is < 0.25 or > 4.0)
+                    throw new ArgumentOutOfRangeException(nameof(parameters), "Speed factor must be between 0.25x and 4.0x.");
+            }
+        }
+        else if (operationId == "convert:webp")
+        {
+            if (parameters["quality"] != null)
+            {
+                if (int.TryParse(parameters["quality"]!.ToString(), out int q))
+                {
+                    if (q is < 1 or > 100)
+                        throw new ArgumentOutOfRangeException(nameof(parameters), "WebP quality must be between 1 and 100.");
+                }
+                else
+                {
+                    throw new ArgumentException("Invalid quality parameter value.");
+                }
+            }
+        }
+        else if (operationId == "tool:compress")
+        {
+            if (parameters["crf"] != null)
+            {
+                if (int.TryParse(parameters["crf"]!.ToString(), out int crf))
+                {
+                    if (crf is < 0 or > 51)
+                        throw new ArgumentOutOfRangeException(nameof(parameters), "Video CRF must be between 0 and 51.");
+                }
+            }
+        }
+    }
+
+    private static double? ParseTimeStringToSeconds(string? timeStr)
+    {
+        if (string.IsNullOrWhiteSpace(timeStr)) return null;
+
+        if (double.TryParse(timeStr, NumberStyles.Float, CultureInfo.InvariantCulture, out double secs))
+            return secs;
+
+        if (TimeSpan.TryParse(timeStr, CultureInfo.InvariantCulture, out TimeSpan ts))
+            return ts.TotalSeconds;
+
+        throw new ArgumentException($"Invalid timestamp format: '{timeStr}'. Expected HH:MM:SS or seconds.");
+    }
+
     private static string? LocateBinary(string binaryName)
     {
+        // 0. Environment variable override (e.g. CI / testing)
+        string? envDir = Environment.GetEnvironmentVariable("PHASEDROP_FFMPEG_DIR");
+        if (!string.IsNullOrEmpty(envDir))
+        {
+            string candidate = Path.Combine(envDir, binaryName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
         // 1. App-local engines directory (packaged mode)
         string localPath = Path.Combine(AppContext.BaseDirectory, "engines", "media", binaryName);
         if (File.Exists(localPath))
             return localPath;
 
-        // 2. PATH search (developer / system-wide mode)
+        // 2. Relative to working directory artifacts/publish
+        string staged = Path.GetFullPath(Path.Combine("artifacts", "publish", "engines", "media", binaryName));
+        if (File.Exists(staged))
+            return staged;
+
+        // 3. PATH search (developer / system-wide mode)
         string? pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (!string.IsNullOrEmpty(pathEnv))
         {

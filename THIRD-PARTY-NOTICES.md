@@ -43,6 +43,8 @@ SOFTWARE.
 * **Distribution Build:** Gyan.dev Windows Essentials Build (`ffmpeg-9.0.2-essentials_build.zip`)
 * **Version:** 9.0.2 (Essentials Build)
 * **Archive SHA-256:** `60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba`
+* **FFmpeg Executable SHA-256:** `3256173F3F8BFFD7DF12227C68ADF68025EDB1832273A9530688A7BB1ED8EDEC`
+* **FFprobe Executable SHA-256:** `F0D36ECBBDD3BCFAC3EFA078C96C7271C2E68B3810595552AC3B7F17E9A65C52`
 * **License:** GNU General Public License (GPL) version 3.0 or later
 * **Source Code:** [https://ffmpeg.org](https://ffmpeg.org) and [https://github.com/GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
 
@@ -51,9 +53,19 @@ FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 
 AUDITED BUILD CONFIGURATION:
 The bundled FFmpeg and FFprobe binaries are built with:
-  --enable-gpl --enable-version3 --enable-static --disable-w32threads
-  --enable-libx264 --enable-libx265 --enable-libvpx --enable-libdav1d
-  --enable-libopus --enable-libmp3lame --enable-libvorbis --enable-libwebp
+  --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect
+  --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2
+  --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh
+  --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264
+  --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx
+  --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi
+  --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf
+  --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va
+  --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi
+  --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb
+  --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm
+  --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis
+  --enable-librubberband
 
 Because --enable-gpl, --enable-version3, libx264, and libx265 are enabled in this binary distribution,
 the effective license governing the redistributed binary files (ffmpeg.exe and ffprobe.exe) is

@@ -231,7 +231,20 @@ public sealed class ArchiveConversionEngine : IConversionEngine
                         throw new SecurityException($"Archive link entry rejected for security (Zip Slip): {entryKey} -> {entry.LinkTarget}");
                     }
 
-                    // 3. Traversal segments check ('..' segments)
+                    // 3. Reject encrypted/password-protected entries cleanly
+                    if (entry.IsEncrypted)
+                    {
+                        throw new NotSupportedException($"Encrypted archive entry '{entryKey}' is not supported.");
+                    }
+
+                    // 4. Reject invalid Windows filename characters
+                    char[] invalidChars = Path.GetInvalidFileNameChars().Where(c => c is not '/' and not '\\').ToArray();
+                    if (entryKey.IndexOfAny(invalidChars) >= 0)
+                    {
+                        throw new SecurityException($"Archive entry contains invalid filename characters: {entryKey}");
+                    }
+
+                    // 5. Traversal segments check ('..' segments)
                     string normalizedKey = entryKey.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
                     var segments = normalizedKey.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
                     if (segments.Any(s => s == ".."))
@@ -239,24 +252,23 @@ public sealed class ArchiveConversionEngine : IConversionEngine
                         throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entryKey}");
                     }
 
-                    // 4. Strict canonical containment check (prevent sibling prefix attacks like dest vs dest_evil)
+                    // 6. Strict canonical containment check (prevent sibling prefix attacks like dest vs dest_evil)
                     string entryDestination = Path.GetFullPath(Path.Combine(destinationFolder, normalizedKey));
                     if (!entryDestination.StartsWith(canonicalDest, StringComparison.OrdinalIgnoreCase))
                     {
                         throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entryKey}");
                     }
 
-                    // 5. Decompression bomb resource exhaustion defense
+                    // 7. Decompression bomb resource exhaustion defense (pre-check via header)
                     if (entry.Size > 0)
                     {
-                        totalExtractedBytes += entry.Size;
-                        if (totalExtractedBytes > MaxTotalUncompressedBytes)
+                        if (totalExtractedBytes + entry.Size > MaxTotalUncompressedBytes)
                         {
                             throw new InvalidOperationException("Archive exceeds maximum permitted extraction size (4 GB decompression limit).");
                         }
                     }
 
-                    // 6. Safe handling for duplicate entries and case-insensitive collisions on Windows
+                    // 8. Safe handling for duplicate entries and case-insensitive collisions on Windows
                     if (extractedPaths.Contains(entryDestination))
                     {
                         string dir = Path.GetDirectoryName(entryDestination)!;
@@ -280,6 +292,17 @@ public sealed class ArchiveConversionEngine : IConversionEngine
                     }
 
                     entry.WriteToFile(entryDestination, new ExtractionOptions { Overwrite = true });
+
+                    // 9. Post-extraction actual disk size check (defense against falsified archive header sizes)
+                    if (File.Exists(entryDestination))
+                    {
+                        long actualWritten = new FileInfo(entryDestination).Length;
+                        totalExtractedBytes += actualWritten;
+                        if (totalExtractedBytes > MaxTotalUncompressedBytes)
+                        {
+                            throw new InvalidOperationException("Archive exceeds maximum permitted extraction size (4 GB decompression limit).");
+                        }
+                    }
                 }
 
                 outputDirs.Add(destinationFolder);

@@ -64,15 +64,14 @@ public class MediaConversionEngineTests : IDisposable
             engine.ExecuteAsync(job, new Progress<JobProgress>(), cts.Token));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ExecuteAsync_WithRealFfmpeg_ExtractsMp3FromVideoWithAudio()
     {
-        var (ffmpeg, ffprobe) = FindFfmpegBinaries();
-        if (ffmpeg == null || ffprobe == null) return; // Skip if FFmpeg not available
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
 
         var engine = new MediaConversionEngine(ffmpeg, ffprobe);
         string inputVideo = Path.Combine(_testDir, "test_with_audio.mp4");
-        if (!TryGenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: true)) return;
+        GenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: true);
 
         var op = new FileOperation("convert:mp3", "MP3", ".mp3", OperationCategory.Audio);
         var job = new ConversionJob([inputVideo], op, _testDir);
@@ -87,15 +86,14 @@ public class MediaConversionEngineTests : IDisposable
         Assert.EndsWith(".mp3", outputMp3, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ExecuteAsync_WithRealFfmpeg_ConvertsVideoWithoutAudioToWebm()
     {
-        var (ffmpeg, ffprobe) = FindFfmpegBinaries();
-        if (ffmpeg == null || ffprobe == null) return;
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
 
         var engine = new MediaConversionEngine(ffmpeg, ffprobe);
         string inputVideo = Path.Combine(_testDir, "test_no_audio.mp4");
-        if (!TryGenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: false)) return;
+        GenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: false);
 
         var op = new FileOperation("convert:webm", "WebM", ".webm", OperationCategory.Video);
         var job = new ConversionJob([inputVideo], op, _testDir);
@@ -110,11 +108,10 @@ public class MediaConversionEngineTests : IDisposable
         Assert.EndsWith(".webm", outputWebm, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ExecuteAsync_WithRealFfmpeg_ConvertsRasterImageToWebp()
     {
-        var (ffmpeg, ffprobe) = FindFfmpegBinaries();
-        if (ffmpeg == null || ffprobe == null) return;
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
 
         var engine = new MediaConversionEngine(ffmpeg, ffprobe);
         string inputPng = Path.Combine(_testDir, "sample.png");
@@ -144,11 +141,113 @@ public class MediaConversionEngineTests : IDisposable
         Assert.Equal((byte)'P', header[11]);
     }
 
-    [Fact]
+    [SkippableFact]
+    public async Task ExecuteAsync_WithRealFfmpeg_SpeedChangeOnAudioOnlyFile_Succeeds()
+    {
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
+
+        var engine = new MediaConversionEngine(ffmpeg, ffprobe);
+        string inputAudio = Path.Combine(_testDir, "test_audio_only.mp3");
+        GenerateSyntheticAudioOnly(ffmpeg, inputAudio);
+
+        var op = new FileOperation("tool:speed", "Speed", ".mp3", OperationCategory.Audio, true);
+        var parameters = new System.Text.Json.Nodes.JsonObject { ["speed"] = 1.25 };
+        var job = new ConversionJob([inputAudio], op, _testDir, parameters);
+
+        var result = await engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Single(result.OutputFiles);
+        string outputSpeedAudio = result.OutputFiles[0];
+        Assert.True(File.Exists(outputSpeedAudio));
+        Assert.True(new FileInfo(outputSpeedAudio).Length > 0);
+    }
+
+    [SkippableFact]
+    public async Task ExecuteAsync_WithRealFfmpeg_TrimVideo_WithValidRange_ProducesTrimmedOutput()
+    {
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
+
+        var engine = new MediaConversionEngine(ffmpeg, ffprobe);
+        string inputVideo = Path.Combine(_testDir, "test_trim_src.mp4");
+        GenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: true);
+
+        var op = new FileOperation("tool:trim", "Trim", ".mp4", OperationCategory.Video, true);
+        var parameters = new System.Text.Json.Nodes.JsonObject
+        {
+            ["start"] = "00:00:00.2",
+            ["duration"] = "00:00:00.5"
+        };
+        var job = new ConversionJob([inputVideo], op, _testDir, parameters);
+
+        var result = await engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Single(result.OutputFiles);
+        string outputTrim = result.OutputFiles[0];
+        Assert.True(File.Exists(outputTrim));
+        Assert.True(new FileInfo(outputTrim).Length > 0);
+    }
+
+    [SkippableFact]
+    public async Task ExecuteAsync_WithRealFfmpeg_InvalidTrimRange_ThrowsArgumentException()
+    {
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
+
+        var engine = new MediaConversionEngine(ffmpeg, ffprobe);
+        string inputVideo = Path.Combine(_testDir, "test_invalid_trim.mp4");
+        GenerateSyntheticVideo(ffmpeg, inputVideo, withAudio: false);
+
+        var op = new FileOperation("tool:trim", "Trim", ".mp4", OperationCategory.Video, true);
+        var parameters = new System.Text.Json.Nodes.JsonObject
+        {
+            ["start"] = "00:00:10",
+            ["end"] = "00:00:02" // End is before start
+        };
+        var job = new ConversionJob([inputVideo], op, _testDir, parameters);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [SkippableFact]
+    public async Task ExecuteAsync_WithRealFfmpeg_InvalidSpeed_ThrowsArgumentOutOfRangeException()
+    {
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
+
+        var engine = new MediaConversionEngine(ffmpeg, ffprobe);
+        string inputAudio = Path.Combine(_testDir, "test_invalid_speed.mp3");
+        GenerateSyntheticAudioOnly(ffmpeg, inputAudio);
+
+        var op = new FileOperation("tool:speed", "Speed", ".mp3", OperationCategory.Audio, true);
+        var parameters = new System.Text.Json.Nodes.JsonObject { ["speed"] = -1.0 };
+        var job = new ConversionJob([inputAudio], op, _testDir, parameters);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [SkippableFact]
+    public async Task ExecuteAsync_WithRealFfmpeg_InvalidWebpQuality_ThrowsArgumentOutOfRangeException()
+    {
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
+
+        var engine = new MediaConversionEngine(ffmpeg, ffprobe);
+        string inputPng = Path.Combine(_testDir, "test_invalid_q.png");
+        CreateSamplePng(inputPng);
+
+        var op = new FileOperation("convert:webp", "WebP", ".webp", OperationCategory.Image);
+        var parameters = new System.Text.Json.Nodes.JsonObject { ["quality"] = 250 };
+        var job = new ConversionJob([inputPng], op, _testDir, parameters);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None));
+    }
+
+    [SkippableFact]
     public async Task ExecuteAsync_CorruptInputFile_ThrowsInvalidOperationException()
     {
-        var (ffmpeg, ffprobe) = FindFfmpegBinaries();
-        if (ffmpeg == null || ffprobe == null) return;
+        var (ffmpeg, ffprobe) = GetRequiredOrSkippedBinaries();
 
         var engine = new MediaConversionEngine(ffmpeg, ffprobe);
         string corruptFile = Path.Combine(_testDir, "corrupt.mp4");
@@ -161,8 +260,43 @@ public class MediaConversionEngineTests : IDisposable
             engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None));
     }
 
+    private static (string ffmpeg, string ffprobe) GetRequiredOrSkippedBinaries()
+    {
+        var (ffmpeg, ffprobe) = FindFfmpegBinaries();
+        bool isCi = IsRunningInCi();
+
+        if (string.IsNullOrEmpty(ffmpeg) || string.IsNullOrEmpty(ffprobe))
+        {
+            if (isCi)
+            {
+                Assert.Fail("Required pinned FFmpeg/FFprobe binaries were not found in CI environment. Ensure scripts/acquire-ffmpeg.ps1 has been executed before testing.");
+            }
+            
+            Skip.If(true, "FFmpeg/FFprobe binaries not found on developer machine. Skipping live media conversion test.");
+        }
+
+        return (ffmpeg!, ffprobe!);
+    }
+
+    private static bool IsRunningInCi()
+    {
+        return string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static (string? ffmpeg, string? ffprobe) FindFfmpegBinaries()
     {
+        // 0. Check explicit environment variable
+        string? envDir = Environment.GetEnvironmentVariable("PHASEDROP_FFMPEG_DIR");
+        if (!string.IsNullOrEmpty(envDir))
+        {
+            string ff = Path.Combine(envDir, "ffmpeg.exe");
+            string fp = Path.Combine(envDir, "ffprobe.exe");
+            if (File.Exists(ff) && File.Exists(fp))
+                return (ff, fp);
+        }
+
+        // 1. Check published engines folder
         string staged = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/publish/engines/media"));
         if (File.Exists(Path.Combine(staged, "ffmpeg.exe")) && File.Exists(Path.Combine(staged, "ffprobe.exe")))
             return (Path.Combine(staged, "ffmpeg.exe"), Path.Combine(staged, "ffprobe.exe"));
@@ -171,6 +305,7 @@ public class MediaConversionEngineTests : IDisposable
         if (File.Exists(Path.Combine(localStaged, "ffmpeg.exe")) && File.Exists(Path.Combine(localStaged, "ffprobe.exe")))
             return (Path.Combine(localStaged, "ffmpeg.exe"), Path.Combine(localStaged, "ffprobe.exe"));
 
+        // 2. Check system PATH
         string? pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (pathEnv != null)
         {
@@ -187,26 +322,67 @@ public class MediaConversionEngineTests : IDisposable
         return (null, null);
     }
 
-    private static bool TryGenerateSyntheticVideo(string ffmpegPath, string outputPath, bool withAudio)
+    private static void GenerateSyntheticVideo(string ffmpegPath, string outputPath, bool withAudio)
     {
-        try
+        var psi = new System.Diagnostics.ProcessStartInfo
         {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = ffmpegPath,
-                Arguments = withAudio
-                    ? $"-y -f lavfi -i testsrc=duration=1:size=320x240:rate=10 -f lavfi -i sine=frequency=1000:duration=1 -c:v libx264 -c:a aac -pix_fmt yuv420p \"{outputPath}\""
-                    : $"-y -f lavfi -i testsrc=duration=1:size=320x240:rate=10 -c:v libx264 -pix_fmt yuv420p \"{outputPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var p = System.Diagnostics.Process.Start(psi);
-            p?.WaitForExit(10000);
-            return p?.ExitCode == 0 && File.Exists(outputPath);
+            FileName = ffmpegPath,
+            Arguments = withAudio
+                ? $"-y -f lavfi -i testsrc=duration=1:size=320x240:rate=10 -f lavfi -i sine=frequency=1000:duration=1 -c:v libx264 -c:a aac -pix_fmt yuv420p \"{outputPath}\""
+                : $"-y -f lavfi -i testsrc=duration=1:size=320x240:rate=10 -c:v libx264 -pix_fmt yuv420p \"{outputPath}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true
+        };
+
+        using var p = System.Diagnostics.Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to launch FFmpeg process from {ffmpegPath}");
+
+        var stderrTask = p.StandardError.ReadToEndAsync();
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+
+        if (!p.WaitForExit(15000))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("Synthetic video generation timed out after 15 seconds.");
         }
-        catch
+
+        if (p.ExitCode != 0 || !File.Exists(outputPath))
         {
-            return false;
+            string err = stderrTask.Result;
+            Assert.Fail($"Synthetic video generation failed (exit code {p.ExitCode}): {err}");
+        }
+    }
+
+    private static void GenerateSyntheticAudioOnly(string ffmpegPath, string outputPath)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = ffmpegPath,
+            Arguments = $"-y -f lavfi -i sine=frequency=1000:duration=1 -c:a libmp3lame \"{outputPath}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true
+        };
+
+        using var p = System.Diagnostics.Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to launch FFmpeg process from {ffmpegPath}");
+
+        var stderrTask = p.StandardError.ReadToEndAsync();
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+
+        if (!p.WaitForExit(15000))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("Synthetic audio generation timed out after 15 seconds.");
+        }
+
+        if (p.ExitCode != 0 || !File.Exists(outputPath))
+        {
+            string err = stderrTask.Result;
+            Assert.Fail($"Synthetic audio generation failed (exit code {p.ExitCode}): {err}");
         }
     }
 

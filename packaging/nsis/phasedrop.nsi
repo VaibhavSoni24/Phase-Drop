@@ -41,10 +41,8 @@ Page custom ThemePageCreate ThemePageLeave
 ; Finish Page options
 !define MUI_FINISHPAGE_RUN "$INSTDIR\PhaseDrop.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch Phase Drop now"
-!define MUI_FINISHPAGE_SHOWREADME ""
-!define MUI_FINISHPAGE_SHOWREADME_TEXT "Start Phase Drop automatically when logging into Windows"
-!define MUI_FINISHPAGE_SHOWREADME_FUNCTION EnableStartupShortcut
-!define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishPageShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE FinishPageLeave
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller Pages
@@ -61,12 +59,22 @@ Var RadioSystem
 Var RadioDark
 Var RadioLight
 Var SelectedTheme
+Var CheckboxStartup
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "..\..\dist\PhaseDrop-Setup-v${PRODUCT_VERSION}-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\PhaseDrop"
 ShowInstDetails show
 ShowUnInstDetails show
+
+; Executable Version Information Metadata
+VIProductVersion "${PRODUCT_VERSION}.0"
+VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
+VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
+VIAddVersionKey "LegalCopyright" "Copyright (c) Phase Drop Contributors"
+VIAddVersionKey "FileDescription" "${PRODUCT_NAME} Setup"
+VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}.0"
+VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 
 ; ==============================================================================
 ; Custom Theme Selection Page Implementation
@@ -110,8 +118,30 @@ Function ThemePageLeave
     ${EndIf}
 FunctionEnd
 
-Function EnableStartupShortcut
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PhaseDrop" '"$INSTDIR\PhaseDrop.exe" --background'
+Function FinishPageShow
+    ${NSD_CreateCheckbox} 120u 108u 195u 14u "Start Phase Drop automatically when logging into Windows"
+    Pop $CheckboxStartup
+    SetCtlColors $CheckboxStartup "${MUI_TEXTCOLOR}" "${MUI_BGCOLOR}"
+
+    ; If an existing startup entry exists in HKCU Run (e.g. upgrade scenario or previous install),
+    ; preserve the user's enabled startup preference. Otherwise default to unchecked (disabled).
+    ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PhaseDrop"
+    ${If} $0 != ""
+        ${NSD_Check} $CheckboxStartup
+    ${Else}
+        ${NSD_Uncheck} $CheckboxStartup
+    ${EndIf}
+FunctionEnd
+
+Function FinishPageLeave
+    ; Check the state of the startup checkbox
+    ${NSD_GetState} $CheckboxStartup $0
+    ${If} $0 == ${BST_CHECKED}
+        WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PhaseDrop" '"$INSTDIR\PhaseDrop.exe" --background'
+    ${Else}
+        ; If unchecked, ensure the run registry entry is removed (does not silently enable or keep stale entry if unchecked)
+        DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "PhaseDrop"
+    ${EndIf}
 FunctionEnd
 
 ; ==============================================================================

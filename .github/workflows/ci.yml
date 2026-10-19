@@ -33,8 +33,11 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Setup FFmpeg
-        uses: FedericoCarboni/setup-ffmpeg@37062fbf7149fc5578d6c57e08aed62458b375d6 # v3.1
+      - name: Acquire Pinned Media Engines
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          powershell -File scripts/acquire-ffmpeg.ps1 -DestinationDir artifacts/publish/engines/media
 
       - name: Restore Dependencies
         run: |
@@ -47,6 +50,9 @@ jobs:
           powershell -File scripts/build.ps1 -Configuration Release
 
       - name: Run Test Suite
+        shell: pwsh
+        env:
+          PHASEDROP_FFMPEG_DIR: ${{ github.workspace }}/artifacts/publish/engines/media
         run: |
           $ErrorActionPreference = "Stop"
           powershell -File scripts/test.ps1 -Configuration Release

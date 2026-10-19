@@ -30,29 +30,43 @@ All third-party libraries, packages, and executables redistributed with or refer
 ## 3. Managed NuGet Dependencies
 
 ### PdfSharp
-* **Version:** 6.1.1 (or latest stable)
+* **Version:** 6.1.1
 * **Publisher:** empira Software GmbH
 * **License:** MIT License
 * **URL:** [https://github.com/empira/PDFsharp](https://github.com/empira/PDFsharp)
 * **Justification:** Fully managed .NET library for creating and modifying PDF documents, extracting pages, merging multiple documents, and handling page rotations without external dependencies.
 
 ### SharpCompress
-* **Version:** 0.38.0+
+* **Version:** 0.50.6
 * **Publisher:** Adam Hathcock
 * **License:** MIT License
 * **URL:** [https://github.com/adamhathcock/sharpcompress](https://github.com/adamhathcock/sharpcompress)
 * **Justification:** Pure C# compression library supporting non-standard formats (7z, Tar, GZip, BZip2) with streaming API, avoiding native DLL dependencies while enforcing strict directory traversal protection.
 
-### Wpf.Ui (Optional Accent & Theme integration)
-* **Version:** 3.0.0+ / Native System Backdrop Interop
-* **Publisher:** Lepoco
-* **License:** MIT License
-* **URL:** [https://github.com/lepoco/wpfui](https://github.com/lepoco/wpfui)
-* **Justification:** Fluent System backdrops (Mica/Acrylic) and Windows 11 design integration in WPF.
+### Fluent Backdrops & Interop Architecture
+* **Implementation:** Native Win32 `DwmSetWindowAttribute` Interop via `dwmapi.dll`
+* **Justification:** Phase Drop invokes native Windows 11 Desktop Window Manager (DWM) APIs directly to apply Mica (`DWMWA_SYSTEMBACKDROP_TYPE = 2`) and Acrylic (`DWMWA_SYSTEMBACKDROP_TYPE = 3`) backdrops, avoiding heavy external WPF UI framework wrappers.
 
 ---
 
-## 4. Packaging & Installer Tools
+## 4. Test Framework Dependencies
+
+### Xunit.SkippableFact
+* **Version:** 1.5.85
+* **Publisher:** Andrew Arnott
+* **License:** MIT License
+* **URL:** [https://github.com/AArnott/Xunit.SkippableFact](https://github.com/AArnott/Xunit.SkippableFact)
+* **Justification:** Provides genuine dynamic test skipping (`[SkippableFact]` / `Skip.If`) for external tool integration tests on development machines while guaranteeing strict failure enforcement in CI.
+
+### xUnit & Test SDK
+* **xUnit:** 2.9.3 (Apache-2.0)
+* **Microsoft.NET.Test.Sdk:** 17.13.0 (Microsoft Pre-Release/Product License)
+* **coverlet.collector:** 6.0.4 (MIT)
+* **xunit.runner.visualstudio:** 3.0.2 (MIT)
+
+---
+
+## 5. Packaging & Installer Tools
 
 ### NSIS (Nullsoft Scriptable Install System)
 * **Version:** 3.13

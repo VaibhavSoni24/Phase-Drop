@@ -82,6 +82,13 @@ if (Test-Path $publishDir) {
 if (-not (Test-Path $distDir)) {
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 }
+$targetInstaller = Join-Path $distDir "PhaseDrop-Setup-v$Version-x64.exe"
+if (Test-Path $targetInstaller) {
+    Remove-Item -Force $targetInstaller
+}
+if (Test-Path "$targetInstaller.sha256") {
+    Remove-Item -Force "$targetInstaller.sha256"
+}
 
 # 4. Self-contained .NET 10 publish
 Write-Host "`n[1/5] Publishing self-contained win-x64 application..." -ForegroundColor Yellow
@@ -157,7 +164,8 @@ if (-not (Test-Path $installerPath)) {
 
 $hash = Get-FileHash -Path $installerPath -Algorithm SHA256
 $hashFile = "$installerPath.sha256"
-"$($hash.Hash)  $(Split-Path $installerPath -Leaf)" | Out-File -FilePath $hashFile -Encoding utf8
+# Standard sha256sum consumable format: '<64-hex>  <filename>'
+"$($hash.Hash.ToLowerInvariant())  $(Split-Path $installerPath -Leaf)" | Out-File -FilePath $hashFile -Encoding ascii
 
 $metaPublishPath = Join-Path $publishDir "engines\media\ffmpeg-metadata.json"
 if (Test-Path $metaPublishPath) {

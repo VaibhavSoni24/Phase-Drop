@@ -20,13 +20,13 @@
 
 ## 🚀 Key Features
 
-* **Instant Radial Menu (Shift-Drag):** Select files in Windows File Explorer or on the Desktop, drag with the left mouse button, and hold `Shift`. A beautiful Windows 11 Fluent radial menu blooms around your cursor. Drop onto your target format or tool—done!
-* **100% Local Processing:** Every conversion, transcode, and transformation happens right on your machine.
-* **Zero External Dependencies Required:** You do **not** need to install Python, .NET runtime, FFmpeg, or Microsoft Office. The installer bundles all necessary processing engines.
-* **Sub-0.1% Idle CPU Usage:** Event-driven Win32 input monitoring guarantees zero background CPU churn when idle.
-* **Non-Destructive & Collision-Safe:** Your original files are never overwritten. Converted files are safely named (`photo (1).webp`) in the chosen folder.
-* **Windows 11 Fluent Aesthetics:** Supports System, Dark, and Light themes with subtle acrylic/Mica backdrops, fluid animations, and crisp vector typography.
-* **Zero Telemetry or Ads:** No accounts, no internet access, no tracking, completely private and open-source.
+* **Instant Radial Menu (Shift-Drag):** Select files in Windows File Explorer or on the Desktop, drag with the left mouse button, and hold `Shift`. A modern Windows 11 Fluent radial menu blooms around your cursor. Drop onto your target format or tool—done!
+* **Local Processing:** All conversions, transcodes, and edits execute entirely locally on your PC.
+* **Self-Contained Distribution:** You do not need to pre-install Python, the .NET runtime, or FFmpeg. The installer bundles self-contained .NET 10 binaries and audited media engines.
+* **Negligible Idle Footprint:** Verified ~0.0% idle CPU usage in Windows 11 benchmarks (`scripts/measure-idle.ps1`) through event-driven Win32 mouse hooks without polling loops.
+* **Non-Destructive & Collision-Safe:** Original files are never overwritten. Output filenames are collision-safe (`photo (1).webp`) and committed atomically.
+* **Windows 11 Fluent Aesthetics:** Supports System, Dark, and Light themes with subtle acrylic/Mica backdrops, fluid animations, and crisp typography.
+* **Privacy by Design:** No telemetry, no accounts, and no background network calls during runtime.
 
 ---
 
@@ -76,11 +76,11 @@ Hold **Ctrl + Shift** while dragging to switch the wheel to **Contextual Tools M
 
 ## 🔒 Privacy & Security Guarantee
 
-* **Offline-First:** Phase Drop does not connect to the internet or transmit telemetry.
+* **Offline Runtime Guarantee:** The installed application operates completely offline, initiates zero network connections, and collects no telemetry. (Network access is used only by developers during build time to fetch pinned NuGet packages and FFmpeg releases).
 * **Strict Zip-Slip & Traversal Defense:** Canonical destination containment prevents directory traversal, rooted paths, and sibling prefix attacks (`dest` vs `dest_evil`).
-* **Resource Exhaustion Defense:** Archive extraction enforces 20,000 maximum entries and a 4 GB uncompressed size ceiling.
-* **Safe Subprocesses:** Commands to FFmpeg/FFprobe use typed parameter lists rather than concatenated shell strings, eliminating command-injection risks.
-* **Atomic Output:** Incomplete or aborted jobs clean up temporary files instantly. Original files are never overwritten.
+* **Resource Exhaustion Defense:** Archive extraction enforces 20,000 maximum entries and a 4 GB uncompressed size ceiling to prevent zip bombs.
+* **Safe Subprocesses:** Commands to FFmpeg/FFprobe use structured argument lists without raw shell string concatenation, eliminating command-injection risks.
+* **Atomic Output:** Incomplete, failed, or cancelled operations remove temporary staging files immediately. Original files are never overwritten.
 
 ---
 

@@ -3,7 +3,8 @@
     Runs automated unit and integration tests across the Phase Drop solution.
 #>
 param(
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [switch]$NoBuild = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +19,13 @@ $dotnetCmd = if (Get-Command "dotnet" -ErrorAction SilentlyContinue) {
 
 Write-Host "=== Running Phase Drop Tests ($Configuration) ===" -ForegroundColor Cyan
 Write-Host "Using .NET CLI: $dotnetCmd" -ForegroundColor Gray
-& $dotnetCmd test PhaseDrop.sln -c $Configuration --no-build --nologo --verbosity normal
+
+$testArgs = @("test", "PhaseDrop.sln", "-c", $Configuration, "--nologo", "--verbosity", "normal")
+if ($NoBuild) {
+    $testArgs += "--no-build"
+}
+
+& $dotnetCmd @testArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Tests failed with exit code $LASTEXITCODE"
