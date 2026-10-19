@@ -159,6 +159,11 @@ $hash = Get-FileHash -Path $installerPath -Algorithm SHA256
 $hashFile = "$installerPath.sha256"
 "$($hash.Hash)  $(Split-Path $installerPath -Leaf)" | Out-File -FilePath $hashFile -Encoding utf8
 
+$metaPublishPath = Join-Path $publishDir "engines\media\ffmpeg-metadata.json"
+if (Test-Path $metaPublishPath) {
+    Copy-Item $metaPublishPath (Join-Path $distDir "ffmpeg-metadata.json") -Force
+}
+
 $fileSizeMb = [Math]::Round(((Get-Item $installerPath).Length / 1MB), 2)
 
 Write-Host "`n=== Packaging Complete ===" -ForegroundColor Green

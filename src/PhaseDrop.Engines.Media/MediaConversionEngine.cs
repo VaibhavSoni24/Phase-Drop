@@ -156,6 +156,9 @@ public sealed partial class MediaConversionEngine : IConversionEngine
                     throw new InvalidOperationException($"Conversion produced an empty or missing output file: {Path.GetFileName(stagingPath)}");
                 }
 
+                // Validate output stream presence, container, and non-empty duration
+                await ValidateMediaOutputAsync(stagingPath, job.Operation);
+
                 CollisionSafeWriter.CommitStagingFile(stagingPath, outputPath);
                 outputFiles.Add(outputPath);
             }
@@ -169,6 +172,60 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         }
 
         return new JobResult(true, outputFiles);
+    }
+
+    private async Task ValidateMediaOutputAsync(string filePath, FileOperation operation)
+    {
+        string? binary = _ffprobePath ?? _ffmpegPath;
+        if (string.IsNullOrEmpty(binary) || !File.Exists(binary))
+            return;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = binary,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(filePath);
+
+            using var process = Process.Start(psi);
+            if (process == null) return;
+
+            string stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            string ext = Path.GetExtension(filePath).ToLowerInvariant();
+
+            // Audio validation: must contain Audio: stream
+            if (ext is ".mp3" or ".wav" or ".flac" or ".aac" or ".m4a" or ".ogg" or ".opus" || operation.Category == OperationCategory.Audio)
+            {
+                if (!stderr.Contains("Audio:", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException($"Validation failed: converted audio file {Path.GetFileName(filePath)} contains no audio stream.");
+                }
+            }
+            // Video validation: must contain Video: stream (except thumbnails / gifs handled as image/video)
+            else if (ext is ".mp4" or ".webm" or ".mkv" or ".mov" or ".avi")
+            {
+                if (!stderr.Contains("Video:", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException($"Validation failed: converted video file {Path.GetFileName(filePath)} contains no video stream.");
+                }
+            }
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Probe failure should not fail a verified output file
+        }
     }
 
     private static string GetTargetExtension(FileOperation operation, string sourcePath)
@@ -197,6 +254,8 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         int totalItems,
         CancellationToken cancellationToken)
     {
+        bool hasAudio = await HasAudioStreamAsync(sourcePath);
+
         var psi = new ProcessStartInfo
         {
             FileName = _ffmpegPath!,
@@ -233,7 +292,7 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         psi.ArgumentList.Add("-i");
         psi.ArgumentList.Add(sourcePath);
 
-        // Tool specific post-input parameters
+        // Tool and conversion specific encoding parameters
         if (operation.Id == "tool:trim")
         {
             string? duration = parameters?["duration"]?.GetValue<string>();
@@ -250,6 +309,70 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             }
             psi.ArgumentList.Add("-c");
             psi.ArgumentList.Add("copy");
+        }
+        else if (operation.Id == "convert:mp4")
+        {
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("libx264");
+            psi.ArgumentList.Add("-pix_fmt");
+            psi.ArgumentList.Add("yuv420p");
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("aac");
+                psi.ArgumentList.Add("-b:a");
+                psi.ArgumentList.Add("192k");
+            }
+        }
+        else if (operation.Id == "convert:webm")
+        {
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("libvpx-vp9");
+            psi.ArgumentList.Add("-crf");
+            psi.ArgumentList.Add("32");
+            psi.ArgumentList.Add("-b:v");
+            psi.ArgumentList.Add("0");
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("libopus");
+                psi.ArgumentList.Add("-b:a");
+                psi.ArgumentList.Add("128k");
+            }
+        }
+        else if (operation.Id == "convert:mkv")
+        {
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("libx264");
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("aac");
+            }
+        }
+        else if (operation.Id == "convert:mov")
+        {
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("libx264");
+            psi.ArgumentList.Add("-pix_fmt");
+            psi.ArgumentList.Add("yuv420p");
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("aac");
+            }
+        }
+        else if (operation.Id == "convert:avi")
+        {
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("mpeg4");
+            psi.ArgumentList.Add("-qscale:v");
+            psi.ArgumentList.Add("3");
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("mp3");
+            }
         }
         else if (operation.Id is "convert:gif" or "tool:to_gif")
         {
@@ -273,13 +396,27 @@ public sealed partial class MediaConversionEngine : IConversionEngine
                 psi.ArgumentList.Add(parameters?["crf"]?.GetValue<string>() ?? "28");
                 psi.ArgumentList.Add("-preset");
                 psi.ArgumentList.Add("fast");
-                psi.ArgumentList.Add("-c:a");
-                psi.ArgumentList.Add("aac");
-                psi.ArgumentList.Add("-b:a");
-                psi.ArgumentList.Add("128k");
+                if (hasAudio)
+                {
+                    psi.ArgumentList.Add("-c:a");
+                    psi.ArgumentList.Add("aac");
+                    psi.ArgumentList.Add("-b:a");
+                    psi.ArgumentList.Add("128k");
+                }
             }
             else
             {
+                string targetExt = Path.GetExtension(stagingPath).ToLowerInvariant();
+                string audioCodec = targetExt switch
+                {
+                    ".mp3" => "libmp3lame",
+                    ".aac" or ".m4a" => "aac",
+                    ".ogg" => "libvorbis",
+                    ".opus" => "libopus",
+                    _ => "libmp3lame"
+                };
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add(audioCodec);
                 psi.ArgumentList.Add("-b:a");
                 psi.ArgumentList.Add(parameters?["bitrate"]?.GetValue<string>() ?? "128k");
             }
@@ -288,7 +425,6 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         {
             double speed = parameters?["speed"]?.GetValue<double>() ?? 1.5;
             double pts = 1.0 / speed;
-            bool hasAudio = await HasAudioStreamAsync(sourcePath);
 
             if (hasAudio)
             {
@@ -330,16 +466,29 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             psi.ArgumentList.Add("-c:a");
             psi.ArgumentList.Add("flac");
         }
-        else if (operation.Id == "convert:webm")
+        else if (operation.Id == "convert:aac")
         {
-            psi.ArgumentList.Add("-c:v");
-            psi.ArgumentList.Add("libvpx-vp9");
-            psi.ArgumentList.Add("-crf");
-            psi.ArgumentList.Add("32");
-            psi.ArgumentList.Add("-b:v");
-            psi.ArgumentList.Add("0");
+            psi.ArgumentList.Add("-vn");
+            psi.ArgumentList.Add("-c:a");
+            psi.ArgumentList.Add("aac");
+            psi.ArgumentList.Add("-b:a");
+            psi.ArgumentList.Add("192k");
+        }
+        else if (operation.Id == "convert:ogg")
+        {
+            psi.ArgumentList.Add("-vn");
+            psi.ArgumentList.Add("-c:a");
+            psi.ArgumentList.Add("libvorbis");
+            psi.ArgumentList.Add("-q:a");
+            psi.ArgumentList.Add("4");
+        }
+        else if (operation.Id == "convert:opus")
+        {
+            psi.ArgumentList.Add("-vn");
             psi.ArgumentList.Add("-c:a");
             psi.ArgumentList.Add("libopus");
+            psi.ArgumentList.Add("-b:a");
+            psi.ArgumentList.Add("128k");
         }
         else if (operation.Id == "convert:webp")
         {
@@ -353,11 +502,18 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         psi.ArgumentList.Add(stagingPath);
 
         using var process = new Process { StartInfo = psi };
+        var errorBuilder = new System.Text.StringBuilder();
 
         process.ErrorDataReceived += (_, e) =>
         {
             if (string.IsNullOrEmpty(e.Data))
                 return;
+
+            lock (errorBuilder)
+            {
+                if (errorBuilder.Length < 4096)
+                    errorBuilder.AppendLine(e.Data);
+            }
 
             // Parse time progress: time=00:01:23.45
             var match = TimeRegex().Match(e.Data);
@@ -394,7 +550,9 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"FFmpeg conversion failed with exit code {process.ExitCode}");
+            string errSummary = errorBuilder.ToString().Trim();
+            string msg = string.IsNullOrEmpty(errSummary) ? $"exit code {process.ExitCode}" : errSummary;
+            throw new InvalidOperationException($"FFmpeg conversion failed: {msg}");
         }
     }
 

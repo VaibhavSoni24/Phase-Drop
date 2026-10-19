@@ -57,21 +57,30 @@ Hold **Ctrl + Shift** while dragging to switch the wheel to **Contextual Tools M
 
 | Family | Supported Input | Supported Output | Specialized Tools |
 | :--- | :--- | :--- | :--- |
-| **Images** | PNG, JPG, JPEG, WebP, BMP, GIF, TIFF, ICO, SVG | PNG, JPG, WebP, BMP, GIF, TIFF, ICO, PDF | Interactive Crop, Resize, Rotate, Flip, Compress, Strip Metadata |
-| **Video** | MP4, MOV, MKV, WebM, AVI, WMV, FLV | MP4, WebM, MKV, MOV, AVI, GIF, MP3, WAV | Interactive Trim, Compress, Audio Strip, GIF Maker, Thumbnail |
+| **Images** | PNG, JPG, JPEG, WebP, BMP, GIF, TIFF, ICO | PNG, JPG, WebP, BMP, GIF, TIFF, ICO, PDF | Interactive Crop, Resize, Rotate, Flip, Compress, Strip Metadata |
+| **Video** | MP4, MOV, MKV, WebM, AVI, WMV, FLV, M4V | MP4, WebM, MKV, MOV, AVI, GIF, MP3, WAV | Interactive Trim, Compress, Audio Strip, GIF Maker, Thumbnail |
 | **Audio** | MP3, WAV, FLAC, AAC, M4A, OGG, Opus, WMA | MP3, WAV, FLAC, AAC, M4A, OGG, Opus | Trim, Bitrate Adjust, Volume Normalization |
 | **PDF** | PDF | PDF, ZIP (archive), 7Z (archive) | Merge, Split, Page Extraction, Page Rotation, Strip Info |
 | **Archives** | ZIP, 7Z, TAR, GZ, TGZ, RAR (Extract only) | ZIP, 7Z, TAR, GZ, TGZ | Compress Folder/Files, Safe Extract, Format Transcode, Integrity Test |
-| **Documents**| CSV, TSV, TXT, JSON, HTML, MD | CSV, TSV, TXT, JSON, HTML, MD, PDF | Table Conversion, Markdown to HTML, Text to PDF |
+| **Documents**| CSV, TSV, TXT, JSON, HTML, MD | CSV, TSV, TXT, JSON, HTML, MD | Table Conversion (CSV/TSV <-> JSON/HTML), Markdown to HTML |
+
+### Format & Processing Demarcations
+* **WebP Generation:** WebP encoding/decoding is routed through the verified bundled FFmpeg engine with stream validation.
+* **Windows ICO Generation:** Produces genuine 22-byte Windows Icon headers (`00 00 01 00`) containing embedded PNG icon directories, fully compliant with Windows shell specifications.
+* **Image-to-PDF:** Multi-image to PDF generation routes through the managed PDF engine (PDFsharp).
+* **SVG Vector Images:** Raw SVG rasterization is currently unsupported and excluded from input routing until a self-contained vector renderer is bundled.
+* **PDF-to-Raster (Images):** PDF page rasterization to PNG/JPEG is unsupported in v1.0.0; extracting pages into ZIP/7Z is provided.
+* **Office Documents:** Proprietary Microsoft Office formats (.docx, .xlsx, .pptx) are unsupported without an installed office suite.
 
 ---
 
 ## 🔒 Privacy & Security Guarantee
 
-* **Offline-First:** Phase Drop does not connect to the internet.
-* **Zip-Slip Protected:** Safe canonical path verification prevents directory traversal attacks during archive extraction.
+* **Offline-First:** Phase Drop does not connect to the internet or transmit telemetry.
+* **Strict Zip-Slip & Traversal Defense:** Canonical destination containment prevents directory traversal, rooted paths, and sibling prefix attacks (`dest` vs `dest_evil`).
+* **Resource Exhaustion Defense:** Archive extraction enforces 20,000 maximum entries and a 4 GB uncompressed size ceiling.
 * **Safe Subprocesses:** Commands to FFmpeg/FFprobe use typed parameter lists rather than concatenated shell strings, eliminating command-injection risks.
-* **Atomic Output:** Incomplete or aborted jobs clean up temporary files instantly.
+* **Atomic Output:** Incomplete or aborted jobs clean up temporary files instantly. Original files are never overwritten.
 
 ---
 

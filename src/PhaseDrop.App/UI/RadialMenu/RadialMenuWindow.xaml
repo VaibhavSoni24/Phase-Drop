@@ -9,6 +9,7 @@
         ShowInTaskbar="False"
         Topmost="True"
         AllowDrop="True"
+        ShowActivated="False"
         WindowStartupLocation="Manual"
         KeyDown="Window_KeyDown">
 

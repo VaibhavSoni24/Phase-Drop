@@ -74,7 +74,8 @@ $requiredFiles = @(
     "THIRD-PARTY-NOTICES.md",
     "Assets\icon.ico",
     "engines\media\ffmpeg.exe",
-    "engines\media\ffprobe.exe"
+    "engines\media\ffprobe.exe",
+    "engines\media\ffmpeg-metadata.json"
 )
 
 foreach ($req in $requiredFiles) {
@@ -89,21 +90,44 @@ Write-Host "All $( $requiredFiles.Count ) required runtime payload files and bun
 # 6. Verify Execution of Bundled Engines in Payload
 $bundledFfmpeg = Join-Path $publishDir "engines\media\ffmpeg.exe"
 $bundledFfprobe = Join-Path $publishDir "engines\media\ffprobe.exe"
+$bundledMeta = Join-Path $publishDir "engines\media\ffmpeg-metadata.json"
 
-$ffmpegOutput = & $bundledFfmpeg -version
+$oldEap = $ErrorActionPreference
+try {
+    $ErrorActionPreference = "SilentlyContinue"
+    $ffmpegOutput = & $bundledFfmpeg -version 2>&1
+    $ffprobeOutput = & $bundledFfprobe -version 2>&1
+}
+finally {
+    $ErrorActionPreference = $oldEap
+}
+
 if ($LASTEXITCODE -ne 0 -or -not $ffmpegOutput) {
     Write-Error "Validation FAILED: Bundled ffmpeg.exe execution check failed (exit code: $LASTEXITCODE)."
     exit 1
 }
-$ffmpegVer = $ffmpegOutput[0]
+$ffmpegVer = ($ffmpegOutput | Select-Object -First 1).ToString().Trim()
 Write-Host "Bundled FFmpeg Verified: $ffmpegVer" -ForegroundColor Green
 
-$ffprobeOutput = & $bundledFfprobe -version
 if ($LASTEXITCODE -ne 0 -or -not $ffprobeOutput) {
     Write-Error "Validation FAILED: Bundled ffprobe.exe execution check failed (exit code: $LASTEXITCODE)."
     exit 1
 }
-$ffprobeVer = $ffprobeOutput[0]
+$ffprobeVer = ($ffprobeOutput | Select-Object -First 1).ToString().Trim()
 Write-Host "Bundled FFprobe Verified: $ffprobeVer" -ForegroundColor Green
+
+# 7. Validate Media Engine Release Metadata Integrity
+$metaContent = Get-Content $bundledMeta -Raw | ConvertFrom-Json
+if (-not $metaContent.version -or -not $metaContent.archiveSha256 -or -not $metaContent.ffmpegSha256) {
+    Write-Error "Validation FAILED: ffmpeg-metadata.json is missing required fields."
+    exit 1
+}
+
+$actualFfmpegHash = (Get-FileHash -Path $bundledFfmpeg -Algorithm SHA256).Hash
+if ($actualFfmpegHash -ne $metaContent.ffmpegSha256) {
+    Write-Error "Validation FAILED: Staged ffmpeg.exe SHA-256 does not match metadata record!`nActual: $actualFfmpegHash`nMetadata: $($metaContent.ffmpegSha256)"
+    exit 1
+}
+Write-Host "FFmpeg Metadata & Binary Hash Consistency Verified." -ForegroundColor Green
 
 Write-Host "`nRelease Package Validation PASSED successfully!" -ForegroundColor Green

@@ -67,4 +67,22 @@ public class CapabilityRegistryTests
         Assert.Contains(tools, op => op.Id == "tool:rotate_pages");
         Assert.Contains(tools, op => op.Id == "tool:strip_metadata");
     }
+
+    [Fact]
+    public void GetCategory_Svg_IsExcludedFromImageCategory()
+    {
+        // SVG is not bundled with a vector rasterizer and must not be categorized as an Image
+        var category = CapabilityRegistry.GetCategory("vector.svg");
+        Assert.Equal(OperationCategory.Unknown, category);
+    }
+
+    [Fact]
+    public void GetConversions_Document_DoesNotOfferUnsupportedPdfConversion()
+    {
+        var conversions = CapabilityRegistry.GetConversions(["notes.md"]);
+        Assert.DoesNotContain(conversions, op => op.Id == "convert:pdf");
+
+        var tools = CapabilityRegistry.GetTools(["notes.md"]);
+        Assert.DoesNotContain(tools, op => op.Id == "tool:txt_to_pdf");
+    }
 }

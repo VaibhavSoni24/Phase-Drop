@@ -16,7 +16,6 @@ public static class CapabilityRegistry
         { ".tiff", OperationCategory.Image },
         { ".tif", OperationCategory.Image },
         { ".ico", OperationCategory.Image },
-        { ".svg", OperationCategory.Image },
 
         // Video
         { ".mp4", OperationCategory.Video },
@@ -125,7 +124,6 @@ public static class CapabilityRegistry
                 new("convert:csv", "CSV", ".csv", OperationCategory.Document, false, "DocCsv", "Comma separated tabular data", true),
                 new("convert:json", "JSON", ".json", OperationCategory.Document, false, "DocJson", "JavaScript Object Notation", true),
                 new("convert:html", "HTML", ".html", OperationCategory.Document, false, "DocHtml", "HTML table or formatted document", true),
-                new("convert:pdf", "PDF", ".pdf", OperationCategory.Document, false, "DocumentPdf", "Export text/markdown to PDF", true),
                 new("convert:txt", "TXT", ".txt", OperationCategory.Document, false, "DocTxt", "Plain text extraction", true)
             ],
             _ => [
@@ -177,8 +175,7 @@ public static class CapabilityRegistry
             ],
             OperationCategory.Document => [
                 new("tool:table_to_json", "To JSON", ".json", OperationCategory.Document, true, "DocJson", "Convert CSV/TSV table to JSON objects", true, false),
-                new("tool:md_to_html", "MD to HTML", ".html", OperationCategory.Document, true, "DocHtml", "Render Markdown document to HTML", true, false),
-                new("tool:txt_to_pdf", "Text to PDF", ".pdf", OperationCategory.Document, true, "DocumentPdf", "Convert text file into clean PDF", true, false)
+                new("tool:md_to_html", "MD to HTML", ".html", OperationCategory.Document, true, "DocHtml", "Render Markdown document to HTML", true, false)
             ],
             _ => [
                 new("tool:pack_zip", "Pack ZIP", ".zip", OperationCategory.Archive, true, "ArchiveZip", "Compress selection to ZIP", true, false),

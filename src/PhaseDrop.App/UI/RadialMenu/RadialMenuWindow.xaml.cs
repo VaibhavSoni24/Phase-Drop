@@ -44,9 +44,6 @@ public partial class RadialMenuWindow : Window
         MouseMove += OnWindowMouseMove;
         MouseLeftButtonUp += OnWindowMouseLeftButtonUp;
 
-        // Clean dismissal on focus loss
-        Deactivated += (_, _) => DismissMenu();
-
         // Apply dark/light theme changes
         ThemeManager.ThemeChanged += () =>
         {
@@ -72,7 +69,8 @@ public partial class RadialMenuWindow : Window
         Top = clamped.Y;
 
         Visibility = Visibility.Visible;
-        Activate();
+        // Note: Do not call Activate() here. In Windows OLE drag-and-drop, activating the window
+        // interrupts Explorer's mouse capture loop and can trigger premature deactivation.
 
         if (Resources["ShowStoryboard"] is Storyboard showSb)
         {

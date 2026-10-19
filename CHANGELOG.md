@@ -44,3 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Hardened archive extraction with canonical destination path checks, Zip-Slip traversal rejection, and automatic cleanup of partial output on failure.
   - Reconciled PDF registry to honestly reflect capabilities (removed placeholder PDF-to-image rasterization; provided archive options).
   - Hardened user settings with atomic persistence (`.tmp` to target move) and corrupted settings fallback with automated backup.
+- **Release Candidate Hardening & Security Audit:**
+  - Least-privilege CI workflow permissions (`contents: read` globally, `contents: write` restricted exclusively to `publish-release`).
+  - Pinned all third-party GitHub Actions to immutable commit SHAs with upstream version tracking.
+  - Pinned deterministic FFmpeg 9.0.2 Essentials build with verified SHA-256 (`60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba`), mandatory encoder/filter capability validation, and `ffmpeg-metadata.json` distribution manifest.
+  - Standard Windows ICO generation embedding genuine 22-byte headers (`00 00 01 00`) and icon directory metadata rather than raw PNG byte streams.
+  - Multi-frame TIFF preservation and post-conversion image decode validation.
+  - Fortified archive security: canonical path containment guarding against sibling-prefix attacks (`dest` vs `dest_evil`), rejection of drive-qualified, rooted, ADS, and traversal entries, resource exhaustion defense (max 20,000 entries, 4 GB ceiling), and Windows case-insensitive collision disambiguation.
+  - Media engine robustness: explicit codecs for MP4, WebM, MKV, MOV, AVI, AAC, OGG, Opus; conditional audio stream handling preventing video filter crashes on audio-only inputs; output stream signature validation.
+  - OLE drag reliability: set `ShowActivated="False"` and removed focus-stealing `Activate()` and `Deactivated` handlers on `RadialMenuWindow` to prevent drag-loop interruption in Windows File Explorer.
+  - Capability registry reconciliation: excluded SVG until a native vector renderer is bundled; excluded unimplemented document-to-pdf operations.

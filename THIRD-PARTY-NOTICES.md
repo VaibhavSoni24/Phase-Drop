@@ -40,7 +40,9 @@ SOFTWARE.
 ## 2. FFmpeg & FFprobe
 * **Project:** FFmpeg & FFprobe
 * **Copyright:** (c) 2000-2026 the FFmpeg developers
-* **Distribution Build:** Gyan.dev Windows Full Build (ffmpeg-release-full.7z)
+* **Distribution Build:** Gyan.dev Windows Essentials Build (`ffmpeg-9.0.2-essentials_build.zip`)
+* **Version:** 9.0.2 (Essentials Build)
+* **Archive SHA-256:** `60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba`
 * **License:** GNU General Public License (GPL) version 3.0 or later
 * **Source Code:** [https://ffmpeg.org](https://ffmpeg.org) and [https://github.com/GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
 
@@ -49,8 +51,9 @@ FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 
 AUDITED BUILD CONFIGURATION:
 The bundled FFmpeg and FFprobe binaries are built with:
-  --enable-gpl --enable-version3 --enable-static --enable-libx264 --enable-libx265
-  --enable-libvpx --enable-libdav1d --enable-libopus --enable-libmp3lame --enable-libvorbis
+  --enable-gpl --enable-version3 --enable-static --disable-w32threads
+  --enable-libx264 --enable-libx265 --enable-libvpx --enable-libdav1d
+  --enable-libopus --enable-libmp3lame --enable-libvorbis --enable-libwebp
 
 Because --enable-gpl, --enable-version3, libx264, and libx265 are enabled in this binary distribution,
 the effective license governing the redistributed binary files (ffmpeg.exe and ffprobe.exe) is
@@ -60,7 +63,8 @@ Phase Drop itself is licensed under the GNU General Public License version 3.0 (
 which is fully compatible with this bundled FFmpeg distribution. In compliance with the GPL v3:
 1. Complete, corresponding source code for the exact FFmpeg version bundled is accessible upstream
    at https://ffmpeg.org/download.html and https://github.com/GyanD/codexffmpeg.
-2. Build configurations and instructions are preserved in scripts/acquire-ffmpeg.ps1 and docs/THIRD_PARTY_DEPENDENCIES.md.
+2. Build configurations, verified archive hash, and acquisition logic are preserved in scripts/acquire-ffmpeg.ps1,
+   artifacts/publish/engines/media/ffmpeg-metadata.json, and docs/THIRD_PARTY_DEPENDENCIES.md.
 3. Users receive this license notice and full GPL-3.0 text alongside the installer distribution.
 ```
 

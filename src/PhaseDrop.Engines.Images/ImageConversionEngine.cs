@@ -54,12 +54,14 @@ public sealed class ImageConversionEngine : IConversionEngine
             {
                 await Task.Run(() => ProcessSingleImage(sourcePath, stagingPath, job.Operation, job.Parameters, cancellationToken), cancellationToken);
 
-                // Verify output integrity and non-zero size before committing
+                // Verify output integrity, non-zero size, and decodability before committing
                 var fi = new FileInfo(stagingPath);
                 if (!fi.Exists || fi.Length == 0)
                 {
                     throw new InvalidOperationException($"Image conversion resulted in an empty output file for: {fileName}");
                 }
+
+                ValidateDecodedImage(stagingPath, targetExt);
 
                 CollisionSafeWriter.CommitStagingFile(stagingPath, outputPath);
                 outputFiles.Add(outputPath);
@@ -74,6 +76,27 @@ public sealed class ImageConversionEngine : IConversionEngine
         }
 
         return new JobResult(true, outputFiles);
+    }
+
+    private static void ValidateDecodedImage(string filePath, string targetExt)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (targetExt.Equals(".ico", StringComparison.OrdinalIgnoreCase))
+        {
+            var header = new byte[4];
+            int read = fs.Read(header, 0, 4);
+            if (read < 4 || header[0] != 0 || header[1] != 0 || header[2] != 1 || header[3] != 0)
+            {
+                throw new InvalidDataException("Generated ICO file does not contain a valid Windows Icon header.");
+            }
+            return;
+        }
+
+        var decoder = BitmapDecoder.Create(fs, BitmapCreateOptions.None, BitmapCacheOption.None);
+        if (decoder.Frames.Count == 0 || decoder.Frames[0].PixelWidth == 0 || decoder.Frames[0].PixelHeight == 0)
+        {
+            throw new InvalidDataException($"Decoded image validation failed for {Path.GetFileName(filePath)}.");
+        }
     }
 
     private static string GetTargetExtension(FileOperation operation, string sourcePath)
@@ -107,6 +130,7 @@ public sealed class ImageConversionEngine : IConversionEngine
 
         BitmapSource frame = decoder.Frames[0];
         BitmapSource resultSource = frame;
+        bool isTransformApplied = false;
 
         // 2. Perform Transformations
         if (operation.Id == "tool:crop")
@@ -122,6 +146,7 @@ public sealed class ImageConversionEngine : IConversionEngine
             int clampedH = Math.Clamp(height, 1, Math.Max(1, frame.PixelHeight - clampedY));
 
             resultSource = new CroppedBitmap(frame, new Int32Rect(clampedX, clampedY, clampedW, clampedH));
+            isTransformApplied = true;
         }
         else if (operation.Id == "tool:resize")
         {
@@ -134,16 +159,19 @@ public sealed class ImageConversionEngine : IConversionEngine
 
             var transform = new ScaleTransform(scaleX, scaleY);
             resultSource = new TransformedBitmap(frame, transform);
+            isTransformApplied = true;
         }
         else if (operation.Id == "tool:rotate_cw")
         {
             var transform = new RotateTransform(90);
             resultSource = new TransformedBitmap(frame, transform);
+            isTransformApplied = true;
         }
         else if (operation.Id == "tool:flip_h")
         {
             var transform = new ScaleTransform(-1, 1);
             resultSource = new TransformedBitmap(frame, transform);
+            isTransformApplied = true;
         }
         else if (operation.Id == "tool:strip_exif")
         {
@@ -153,6 +181,14 @@ public sealed class ImageConversionEngine : IConversionEngine
 
         // 3. Determine Explicit Encoder & Alpha Transparency Handling
         string ext = Path.GetExtension(stagingPath).ToLowerInvariant();
+
+        if (ext == ".ico")
+        {
+            using var outStream = new FileStream(stagingPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            SaveAsWindowsIcon(resultSource, outStream);
+            return;
+        }
+
         BitmapEncoder encoder;
 
         if (ext is ".jpg" or ".jpeg")
@@ -188,12 +224,18 @@ public sealed class ImageConversionEngine : IConversionEngine
         }
         else if (ext is ".tiff" or ".tif")
         {
-            encoder = new TiffBitmapEncoder { Compression = TiffCompressOption.Zip };
-        }
-        else if (ext == ".ico")
-        {
-            // Windows Icon format: wrap into standard ICO stream or PngBitmapEncoder
-            encoder = new PngBitmapEncoder();
+            var tiffEnc = new TiffBitmapEncoder { Compression = TiffCompressOption.Zip };
+            if (!isTransformApplied && decoder.Frames.Count > 1)
+            {
+                foreach (var f in decoder.Frames)
+                {
+                    tiffEnc.Frames.Add(BitmapFrame.Create(f));
+                }
+                using var tiffStream = new FileStream(stagingPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                tiffEnc.Save(tiffStream);
+                return;
+            }
+            encoder = tiffEnc;
         }
         else
         {
@@ -206,5 +248,36 @@ public sealed class ImageConversionEngine : IConversionEngine
         {
             encoder.Save(outStream);
         }
+    }
+
+    private static void SaveAsWindowsIcon(BitmapSource source, Stream outStream)
+    {
+        // 1. Encode source image as PNG in memory
+        using var pngMs = new MemoryStream();
+        var pngEncoder = new PngBitmapEncoder();
+        pngEncoder.Frames.Add(BitmapFrame.Create(source));
+        pngEncoder.Save(pngMs);
+        byte[] pngData = pngMs.ToArray();
+
+        // 2. Write standard Windows ICO Header (6 bytes: idReserved, idType=1, idCount=1)
+        using var writer = new BinaryWriter(outStream, System.Text.Encoding.Default, leaveOpen: true);
+        writer.Write((ushort)0); // Reserved (0)
+        writer.Write((ushort)1); // Image type: 1 = ICO
+        writer.Write((ushort)1); // Image count: 1
+
+        // 3. Write Directory Entry (16 bytes)
+        byte width = source.PixelWidth >= 256 ? (byte)0 : (byte)source.PixelWidth;
+        byte height = source.PixelHeight >= 256 ? (byte)0 : (byte)source.PixelHeight;
+        writer.Write(width);                   // Width
+        writer.Write(height);                  // Height
+        writer.Write((byte)0);                 // Color count (0 for 32bpp)
+        writer.Write((byte)0);                 // Reserved
+        writer.Write((ushort)1);               // Color planes
+        writer.Write((ushort)32);              // Bits per pixel
+        writer.Write((uint)pngData.Length);    // Size of image data
+        writer.Write((uint)22);                // Offset of image data from beginning of file (6 + 16 = 22)
+
+        // 4. Write PNG image payload
+        writer.Write(pngData);
     }
 }

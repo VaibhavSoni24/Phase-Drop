@@ -107,6 +107,111 @@ public class ArchiveConversionEngineTests : IDisposable
         Assert.False(File.Exists(parentEscaped));
     }
 
+    [Fact]
+    public async Task Extract_SiblingPrefixAttack_ThrowsSecurityException()
+    {
+        string maliciousZip = Path.Combine(_testDir, "malicious_sibling.zip");
+        using (var fs = File.Create(maliciousZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            // Sibling prefix attack: attempts to use .. to go to a folder whose name starts with destination name
+            var entry = archive.CreateEntry("../sibling_folder/evil.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("Hostile sibling escape");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([maliciousZip], extractOp, _testDir);
+
+        var ex = await Assert.ThrowsAsync<System.Security.SecurityException>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+
+        Assert.Contains("traversal", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Extract_RootedPath_ThrowsSecurityException()
+    {
+        string maliciousZip = Path.Combine(_testDir, "malicious_rooted.zip");
+        using (var fs = File.Create(maliciousZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("/rooted/absolute.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("Hostile rooted file");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([maliciousZip], extractOp, _testDir);
+
+        var ex = await Assert.ThrowsAsync<System.Security.SecurityException>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+
+        Assert.Contains("rooted", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Extract_DuplicateEntries_DisambiguatesWithoutOverwrite()
+    {
+        string dupZip = Path.Combine(_testDir, "duplicates.zip");
+        using (var fs = File.Create(dupZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry1 = archive.CreateEntry("report.txt");
+            using (var w1 = new StreamWriter(entry1.Open()))
+                w1.Write("First copy");
+
+            var entry2 = archive.CreateEntry("report.txt");
+            using (var w2 = new StreamWriter(entry2.Open()))
+                w2.Write("Second copy");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([dupZip], extractOp, _testDir);
+
+        var result = await _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string extractedFolder = result.OutputFiles[0];
+        string file1 = Path.Combine(extractedFolder, "report.txt");
+        string file2 = Path.Combine(extractedFolder, "report (1).txt");
+
+        Assert.True(File.Exists(file1));
+        Assert.True(File.Exists(file2));
+        Assert.Equal("First copy", File.ReadAllText(file1));
+        Assert.Equal("Second copy", File.ReadAllText(file2));
+    }
+
+    [Fact]
+    public async Task Extract_CaseInsensitiveCollision_DisambiguatesOnWindows()
+    {
+        string caseZip = Path.Combine(_testDir, "case_collision.zip");
+        using (var fs = File.Create(caseZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry1 = archive.CreateEntry("Readme.txt");
+            using (var w1 = new StreamWriter(entry1.Open()))
+                w1.Write("Lowercase format");
+
+            var entry2 = archive.CreateEntry("README.TXT");
+            using (var w2 = new StreamWriter(entry2.Open()))
+                w2.Write("Uppercase format");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([caseZip], extractOp, _testDir);
+
+        var result = await _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string extractedFolder = result.OutputFiles[0];
+        string file1 = Path.Combine(extractedFolder, "Readme.txt");
+        string file2 = Path.Combine(extractedFolder, "README (1).TXT");
+
+        Assert.True(File.Exists(file1));
+        Assert.True(File.Exists(file2));
+    }
+
     public void Dispose()
     {
         try

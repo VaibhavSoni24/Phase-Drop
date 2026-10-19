@@ -191,10 +191,20 @@ public sealed class ArchiveConversionEngine : IConversionEngine
             Directory.CreateDirectory(destinationFolder);
             string canonicalDest = Path.GetFullPath(destinationFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
+            const int MaxEntryCount = 20000;
+            const long MaxTotalUncompressedBytes = 4L * 1024 * 1024 * 1024; // 4 GB safety ceiling
+            long totalExtractedBytes = 0;
+            var extractedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             try
             {
                 using var archive = ArchiveFactory.OpenArchive(archivePath);
                 int total = archive.Entries.Count();
+                if (total > MaxEntryCount)
+                {
+                    throw new InvalidOperationException($"Archive contains {total} entries, exceeding the maximum safe limit of {MaxEntryCount}.");
+                }
+
                 int current = 0;
 
                 foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
@@ -203,16 +213,71 @@ public sealed class ArchiveConversionEngine : IConversionEngine
                     current++;
                     progress.Report(new JobProgress($"Extracting {entry.Key}", (double)current / total, current, total));
 
-                    // Strict Zip Slip defense: verify entry canonical path stays inside destination
-                    string entryDestination = Path.GetFullPath(Path.Combine(destinationFolder, entry.Key ?? "file"));
+                    string entryKey = entry.Key ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(entryKey))
+                    {
+                        continue;
+                    }
+
+                    // 1. Rooted, drive-qualified, and alternate data stream (ADS) validation
+                    if (entryKey.Contains(':') || Path.IsPathRooted(entryKey))
+                    {
+                        throw new SecurityException($"Malicious archive entry path detected (drive-qualified or rooted Zip Slip): {entryKey}");
+                    }
+
+                    // 2. Reject symlink and hardlink entries that could escape or manipulate external files
+                    if (!string.IsNullOrEmpty(entry.LinkTarget))
+                    {
+                        throw new SecurityException($"Archive link entry rejected for security (Zip Slip): {entryKey} -> {entry.LinkTarget}");
+                    }
+
+                    // 3. Traversal segments check ('..' segments)
+                    string normalizedKey = entryKey.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+                    var segments = normalizedKey.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+                    if (segments.Any(s => s == ".."))
+                    {
+                        throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entryKey}");
+                    }
+
+                    // 4. Strict canonical containment check (prevent sibling prefix attacks like dest vs dest_evil)
+                    string entryDestination = Path.GetFullPath(Path.Combine(destinationFolder, normalizedKey));
                     if (!entryDestination.StartsWith(canonicalDest, StringComparison.OrdinalIgnoreCase))
                     {
-                        throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entry.Key}");
+                        throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entryKey}");
                     }
+
+                    // 5. Decompression bomb resource exhaustion defense
+                    if (entry.Size > 0)
+                    {
+                        totalExtractedBytes += entry.Size;
+                        if (totalExtractedBytes > MaxTotalUncompressedBytes)
+                        {
+                            throw new InvalidOperationException("Archive exceeds maximum permitted extraction size (4 GB decompression limit).");
+                        }
+                    }
+
+                    // 6. Safe handling for duplicate entries and case-insensitive collisions on Windows
+                    if (extractedPaths.Contains(entryDestination))
+                    {
+                        string dir = Path.GetDirectoryName(entryDestination)!;
+                        string nameWithoutExt = Path.GetFileNameWithoutExtension(entryDestination);
+                        string ext = Path.GetExtension(entryDestination);
+                        int disambiguate = 1;
+
+                        while (extractedPaths.Contains(entryDestination) || File.Exists(entryDestination))
+                        {
+                            entryDestination = Path.Combine(dir, $"{nameWithoutExt} ({disambiguate}){ext}");
+                            disambiguate++;
+                        }
+                    }
+
+                    extractedPaths.Add(entryDestination);
 
                     string? entryDir = Path.GetDirectoryName(entryDestination);
                     if (!string.IsNullOrEmpty(entryDir))
+                    {
                         Directory.CreateDirectory(entryDir);
+                    }
 
                     entry.WriteToFile(entryDestination, new ExtractionOptions { Overwrite = true });
                 }

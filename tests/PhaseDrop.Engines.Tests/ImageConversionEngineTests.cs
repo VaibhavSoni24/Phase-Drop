@@ -132,6 +132,78 @@ public class ImageConversionEngineTests : IDisposable
         Assert.Equal(50, decoder.Frames[0].PixelHeight);
     }
 
+    [Fact]
+    public async Task Convert_PngToIco_ProducesValidWindowsIconHeaderAndNotRawPng()
+    {
+        var op = new FileOperation("convert:ico", "ICO", ".ico", OperationCategory.Image);
+        var job = new ConversionJob([_sourcePng], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string icoPath = result.OutputFiles[0];
+        Assert.True(File.Exists(icoPath));
+
+        // Verify Windows Icon header magic bytes (00 00 01 00)
+        byte[] bytes = await File.ReadAllBytesAsync(icoPath);
+        Assert.True(bytes.Length > 22);
+
+        // Windows ICO magic header: reserved=0, type=1
+        Assert.Equal(0, bytes[0]);
+        Assert.Equal(0, bytes[1]);
+        Assert.Equal(1, bytes[2]);
+        Assert.Equal(0, bytes[3]);
+
+        // CRITICAL: Ensure it is NOT raw PNG bytes under .ico filename
+        bool isRawPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
+        Assert.False(isRawPng, "ICO output must be a valid Windows Icon container, not raw PNG bytes.");
+    }
+
+    [Fact]
+    public async Task Convert_PngToBmp_ProducesValidBmpHeader()
+    {
+        var op = new FileOperation("convert:bmp", "BMP", ".bmp", OperationCategory.Image);
+        var job = new ConversionJob([_sourcePng], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string bmpPath = result.OutputFiles[0];
+
+        byte[] header = new byte[2];
+        using (var fs = File.OpenRead(bmpPath))
+        {
+            fs.ReadExactly(header, 0, 2);
+        }
+
+        // BMP header must start with 'BM' (0x42, 0x4D)
+        Assert.Equal(0x42, header[0]);
+        Assert.Equal(0x4D, header[1]);
+    }
+
+    [Fact]
+    public async Task Convert_PngToTiff_ProducesValidTiffHeader()
+    {
+        var op = new FileOperation("convert:tiff", "TIFF", ".tiff", OperationCategory.Image);
+        var job = new ConversionJob([_sourcePng], op, _testDir);
+
+        var result = await _engine.ExecuteAsync(job, new Progress<JobProgress>(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        string tiffPath = result.OutputFiles[0];
+
+        byte[] header = new byte[4];
+        using (var fs = File.OpenRead(tiffPath))
+        {
+            fs.ReadExactly(header, 0, 4);
+        }
+
+        // TIFF header: "II*\0" (little endian) or "MM\0*" (big endian)
+        bool isLittleEndian = header[0] == 0x49 && header[1] == 0x49 && header[2] == 0x2A && header[3] == 0x00;
+        bool isBigEndian = header[0] == 0x4D && header[1] == 0x4D && header[2] == 0x00 && header[3] == 0x2A;
+        Assert.True(isLittleEndian || isBigEndian, "TIFF file must have valid TIFF magic header.");
+    }
+
     private static void CreateSamplePng(string path, int width, int height)
     {
         int rawStride = (width * 32 + 7) / 8;

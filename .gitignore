@@ -55,3 +55,7 @@ packaging/nsis/*.exe
 
 # Exclude original raw root logo once moved
 Phase Drop Logo.png
+
+# Local cache
+.cache/
+

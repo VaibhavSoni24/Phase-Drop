@@ -14,13 +14,13 @@ The Phase Drop capability registry maps detected input file extensions to functi
 
 ## 2. Format Families & Operations
 
-### 2.1 Raster & Vector Images
-* **Supported Input Formats:** `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.gif`, `.tiff`, `.tif`, `.ico`, `.svg`
+### 2.1 Raster Images
+* **Supported Input Formats:** `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.gif`, `.tiff`, `.tif`, `.ico`
 * **Supported Output Formats:** `.png`, `.jpg`, `.webp`, `.bmp`, `.gif`, `.tiff`, `.ico`, `.pdf`
 
 | Operation | Engine | Lossy/Lossless | Batch Capable | Interactive Tool UI | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Convert Format (PNG, JPG, BMP, GIF, TIFF, ICO)** | WIC / Managed | Configurable | Yes | No (Direct Drop) | Unit tested, Integration tested |
+| **Convert Format (PNG, JPG, BMP, GIF, TIFF, ICO)** | WIC / Managed (ICO wrapped with standard 22-byte header) | Configurable | Yes | No (Direct Drop) | Unit tested, Integration tested |
 | **Convert to WebP** | Bundled FFmpeg | Lossy/Lossless | Yes | No (Direct Drop) | Unit tested, Integration tested |
 | **Resize (Scale/Pixels)** | WIC / Managed | Lossy/Lossless | Yes | Yes (Tool Dialog) | Unit tested, Manually verified on Windows |
 | **Crop** | WIC / Managed | Lossy/Lossless | Single | Yes (Crop Frame UI) | Unit tested, Manually verified on Windows |
@@ -91,19 +91,21 @@ The Phase Drop capability registry maps detected input file extensions to functi
 
 ### 2.6 Documents & Data
 * **Supported Input Formats:** `.csv`, `.tsv`, `.txt`, `.json`, `.html`, `.md`
-* **Supported Output Formats:** `.csv`, `.tsv`, `.txt`, `.json`, `.html`, `.md`, `.pdf`
+* **Supported Output Formats:** `.csv`, `.tsv`, `.txt`, `.json`, `.html`, `.md`
 
 | Operation | Engine | Lossy/Lossless | Batch Capable | Interactive Tool UI | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **RFC 4180 CSV <-> JSON** | Managed State-Machine Parser | Lossless | Yes | No (Direct Drop) | Unit tested, Integration tested |
 | **RFC 4180 CSV <-> HTML Table** | Managed Text Engine (Entity Escaped) | Lossless | Yes | No (Direct Drop) | Unit tested, Integration tested |
 | **Markdown -> HTML (Escaped)** | Managed Text Engine | Lossless | Yes | No (Direct Drop) | Implemented, Unit tested |
-| **Plain Text -> PDF** | Managed Document Engine | Lossless | Yes | No (Direct Drop) | Implemented, Unit tested |
+| **Plain Text -> PDF** | None (Requires dedicated print engine) | N/A | No | No | **Unsupported or deferred** |
 
 ---
 
 ## 3. Known Limitations & Honest Architectural Demarcation
 1. **PDF Page Rasterization (Deferred):** PDFsharp 6.1 is a document generation and page-manipulation library, not a rasterizer. Converting PDF pages to raster bitmaps (`PNG`/`JPEG`) requires a full rasterizer engine (e.g. PDFium). Rather than pretending metadata operations or unverified FFmpeg filters accomplish this, PDF-to-image is excluded from the active registry until a fully licensed rasterizer is bundled.
-2. **Office Formats (`.docx`, `.pptx`, `.xlsx`):** Exact layout fidelity without Microsoft Office installed requires a large headless office suite. When Office is absent, Phase Drop extracts text and table structures safely rather than claiming layout-identical rendering.
-3. **Proprietary Archives (RAR):** Creating `.rar` archives requires proprietary licensing; Phase Drop extracts `.rar` via SharpCompress but writes exclusively to open formats (`.zip`, `.7z`, `.tar.gz`).
-4. **Encrypted / DRM Content:** Phase Drop does not bypass Widevine or password-protected archives without valid user credentials.
+2. **Document to PDF (Deferred):** Document-to-PDF formatting requires layout flow calculation and typography pagination. While multi-image to PDF is fully supported and tested via PdfSharp, raw plain-text/document-to-PDF is deferred until a dedicated layout pipeline is bundled.
+3. **SVG Vector Rendering (Deferred):** Vector SVG input rendering requires a full vector rendering engine (e.g., SkiaSharp or Svg.NET). SVG is excluded from supported image inputs until a verified native renderer is packaged.
+4. **Office Formats (`.docx`, `.pptx`, `.xlsx`):** Exact layout fidelity without Microsoft Office installed requires a large headless office suite. When Office is absent, Phase Drop extracts text and table structures safely rather than claiming layout-identical rendering.
+5. **Proprietary Archives (RAR):** Creating `.rar` archives requires proprietary licensing; Phase Drop extracts `.rar` via SharpCompress but writes exclusively to open formats (`.zip`, `.7z`, `.tar.gz`).
+6. **Encrypted / DRM Content:** Phase Drop does not bypass Widevine or password-protected archives without valid user credentials.
