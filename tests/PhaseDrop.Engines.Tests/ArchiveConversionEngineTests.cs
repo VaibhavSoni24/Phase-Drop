@@ -82,6 +82,31 @@ public class ArchiveConversionEngineTests : IDisposable
         Assert.True(testResult.Success);
     }
 
+    [Fact]
+    public async Task Extract_HostileZipSlipPath_ThrowsSecurityExceptionAndCleansUp()
+    {
+        string maliciousZip = Path.Combine(_testDir, "malicious_slip.zip");
+        using (var fs = File.Create(maliciousZip))
+        using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("../../../hostile_escape.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("Hostile content escaping destination");
+        }
+
+        var extractOp = new FileOperation("tool:extract", "Extract", "", OperationCategory.Archive, true);
+        var extractJob = new ConversionJob([maliciousZip], extractOp, _testDir);
+
+        var ex = await Assert.ThrowsAsync<System.Security.SecurityException>(() =>
+            _engine.ExecuteAsync(extractJob, new Progress<JobProgress>(), CancellationToken.None));
+
+        Assert.Contains("Zip Slip", ex.Message);
+
+        // Verify no escaped file was created outside _testDir
+        string parentEscaped = Path.Combine(Path.GetDirectoryName(_testDir)!, "hostile_escape.txt");
+        Assert.False(File.Exists(parentEscaped));
+    }
+
     public void Dispose()
     {
         try

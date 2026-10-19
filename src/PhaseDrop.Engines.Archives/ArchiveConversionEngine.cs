@@ -191,31 +191,50 @@ public sealed class ArchiveConversionEngine : IConversionEngine
             Directory.CreateDirectory(destinationFolder);
             string canonicalDest = Path.GetFullPath(destinationFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-            using var archive = ArchiveFactory.OpenArchive(archivePath);
-            int total = archive.Entries.Count();
-            int current = 0;
-
-            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                current++;
-                progress.Report(new JobProgress($"Extracting {entry.Key}", (double)current / total, current, total));
+                using var archive = ArchiveFactory.OpenArchive(archivePath);
+                int total = archive.Entries.Count();
+                int current = 0;
 
-                // Strict Zip Slip defense: verify entry canonical path stays inside destination
-                string entryDestination = Path.GetFullPath(Path.Combine(destinationFolder, entry.Key ?? "file"));
-                if (!entryDestination.StartsWith(canonicalDest, StringComparison.OrdinalIgnoreCase))
+                foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                 {
-                    throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entry.Key}");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    current++;
+                    progress.Report(new JobProgress($"Extracting {entry.Key}", (double)current / total, current, total));
+
+                    // Strict Zip Slip defense: verify entry canonical path stays inside destination
+                    string entryDestination = Path.GetFullPath(Path.Combine(destinationFolder, entry.Key ?? "file"));
+                    if (!entryDestination.StartsWith(canonicalDest, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new SecurityException($"Malicious archive entry path traversal detected (Zip Slip): {entry.Key}");
+                    }
+
+                    string? entryDir = Path.GetDirectoryName(entryDestination);
+                    if (!string.IsNullOrEmpty(entryDir))
+                        Directory.CreateDirectory(entryDir);
+
+                    entry.WriteToFile(entryDestination, new ExtractionOptions { Overwrite = true });
                 }
 
-                string? entryDir = Path.GetDirectoryName(entryDestination);
-                if (!string.IsNullOrEmpty(entryDir))
-                    Directory.CreateDirectory(entryDir);
-
-                entry.WriteToFile(entryDestination, new ExtractionOptions { Overwrite = true });
+                outputDirs.Add(destinationFolder);
             }
+            catch
+            {
+                try
+                {
+                    if (Directory.Exists(destinationFolder))
+                    {
+                        Directory.Delete(destinationFolder, true);
+                    }
+                }
+                catch
+                {
+                    // Best effort cleanup on extraction failure
+                }
 
-            outputDirs.Add(destinationFolder);
+                throw;
+            }
         }
 
         return new JobResult(true, outputDirs);
