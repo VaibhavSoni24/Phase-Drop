@@ -1,0 +1,152 @@
+<Window x:Class="PhaseDrop.App.UI.RadialMenu.RadialMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Phase Drop Radial Menu"
+        Width="440" Height="440"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowDrop="True"
+        WindowStartupLocation="Manual"
+        KeyDown="Window_KeyDown">
+
+    <Window.Resources>
+        <!-- Storyboard for radial appearance -->
+        <Storyboard x:Key="ShowStoryboard">
+            <DoubleAnimation Storyboard.TargetName="RootGrid"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.0" To="1.0"
+                             Duration="0:0:0.14" />
+            <DoubleAnimation Storyboard.TargetName="RootScale"
+                             Storyboard.TargetProperty="ScaleX"
+                             From="0.84" To="1.0"
+                             Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="RootScale"
+                             Storyboard.TargetProperty="ScaleY"
+                             From="0.84" To="1.0"
+                             Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="HideStoryboard">
+            <DoubleAnimation Storyboard.TargetName="RootGrid"
+                             Storyboard.TargetProperty="Opacity"
+                             From="1.0" To="0.0"
+                             Duration="0:0:0.10" />
+            <DoubleAnimation Storyboard.TargetName="RootScale"
+                             Storyboard.TargetProperty="ScaleX"
+                             From="1.0" To="0.92"
+                             Duration="0:0:0.10">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="RootScale"
+                             Storyboard.TargetProperty="ScaleY"
+                             From="1.0" To="0.92"
+                             Duration="0:0:0.10">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid"
+          Width="440" Height="440"
+          RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="RootScale" ScaleX="1.0" ScaleY="1.0" />
+        </Grid.RenderTransform>
+
+        <!-- Ambient Backdrop Shadow / Glow -->
+        <Ellipse Width="390" Height="390"
+                 HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Ellipse.Effect>
+                <DropShadowEffect BlurRadius="40"
+                                  Color="#000000"
+                                  Opacity="0.45"
+                                  ShadowDepth="0" />
+            </Ellipse.Effect>
+            <Ellipse.Fill>
+                <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
+                    <GradientStop Color="#22000000" Offset="0.6" />
+                    <GradientStop Color="#00000000" Offset="1.0" />
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+
+        <!-- Dynamic Petals Layer -->
+        <Canvas x:Name="PetalCanvas"
+                Width="440" Height="440"
+                HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <!-- Center Hub -->
+        <Grid Width="136" Height="136"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              Cursor="Hand"
+              MouseLeftButtonUp="CenterHub_Click">
+            
+            <!-- Hub Background with subtle shadow -->
+            <Ellipse x:Name="CenterEllipse"
+                     Width="136" Height="136"
+                     Fill="{DynamicResource BgElevated}"
+                     Stroke="{DynamicResource BorderPrimary}"
+                     StrokeThickness="1.5">
+                <Ellipse.Effect>
+                    <DropShadowEffect BlurRadius="16"
+                                      Color="#000000"
+                                      Opacity="0.30"
+                                      ShadowDepth="2" />
+                </Ellipse.Effect>
+            </Ellipse>
+
+            <!-- Center Content -->
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10">
+                <!-- Mode Badge -->
+                <Border x:Name="ModeBadge"
+                        CornerRadius="8"
+                        Padding="8,2"
+                        HorizontalAlignment="Center"
+                        Background="{DynamicResource AccentPrimary}"
+                        Margin="0,0,0,4">
+                    <TextBlock x:Name="ModeText"
+                               Text="CONVERT"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="White" />
+                </Border>
+
+                <!-- File Summary Text -->
+                <TextBlock x:Name="SummaryText"
+                           Text="Drop Files Here"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           TextTrimming="CharacterEllipsis"
+                           TextAlignment="Center"
+                           MaxWidth="115"
+                           Margin="0,2,0,2" />
+
+                <!-- Status / Hover Description -->
+                <TextBlock x:Name="StatusText"
+                           Text="Release inside to cancel"
+                           FontSize="9.5"
+                           Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           MaxWidth="115"
+                           LineHeight="12" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,174 @@
+<Window x:Class="PhaseDrop.App.UI.Tasks.TaskIndicatorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Phase Drop Tasks"
+        Width="340" Height="140"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="Manual">
+
+    <Window.Resources>
+        <Storyboard x:Key="FadeInStoryboard">
+            <DoubleAnimation Storyboard.TargetName="CardBorder"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.0" To="1.0"
+                             Duration="0:0:0.18" />
+            <DoubleAnimation Storyboard.TargetName="CardTranslate"
+                             Storyboard.TargetProperty="Y"
+                             From="20.0" To="0.0"
+                             Duration="0:0:0.18">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Key="FadeOutStoryboard">
+            <DoubleAnimation Storyboard.TargetName="CardBorder"
+                             Storyboard.TargetProperty="Opacity"
+                             From="1.0" To="0.0"
+                             Duration="0:0:0.16" />
+            <DoubleAnimation Storyboard.TargetName="CardTranslate"
+                             Storyboard.TargetProperty="Y"
+                             From="0.0" To="20.0"
+                             Duration="0:0:0.16">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Window.Resources>
+
+    <Border x:Name="CardBorder"
+            Margin="10"
+            Background="{DynamicResource BgElevated}"
+            BorderBrush="{DynamicResource BorderPrimary}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="14,12"
+            RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform>
+            <TranslateTransform x:Name="CardTranslate" Y="0" />
+        </Border.RenderTransform>
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22"
+                              Color="#000000"
+                              Opacity="0.35"
+                              ShadowDepth="3" />
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header Row -->
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Status Icon -->
+                <Path x:Name="StatusIcon"
+                      Grid.Column="0"
+                      Data="{StaticResource IconSettings}"
+                      Fill="{DynamicResource AccentPrimary}"
+                      Stretch="Uniform"
+                      Width="16" Height="16"
+                      VerticalAlignment="Center"
+                      Margin="0,0,8,0" />
+
+                <!-- Job Title / File Name -->
+                <TextBlock x:Name="JobTitleText"
+                           Grid.Column="1"
+                           Text="Processing image.png"
+                           FontWeight="SemiBold"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextPrimary}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+
+                <!-- Close Button -->
+                <Button Grid.Column="2"
+                        Width="20" Height="20"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="Dismiss_Click">
+                    <Path Data="{StaticResource IconClose}"
+                          Fill="{DynamicResource TextSecondary}"
+                          Stretch="Uniform"
+                          Width="10" Height="10" />
+                </Button>
+            </Grid>
+
+            <!-- Progress Bar & Percentage Row -->
+            <Grid Grid.Row="1" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ProgressBar x:Name="JobProgressBar"
+                             Grid.Column="0"
+                             Height="6"
+                             Minimum="0" Maximum="100" Value="0"
+                             Foreground="{DynamicResource AccentPrimary}"
+                             Background="{DynamicResource BgSecondary}"
+                             BorderThickness="0"
+                             VerticalAlignment="Center" />
+
+                <TextBlock x:Name="ProgressPercentText"
+                           Grid.Column="1"
+                           Text="0%"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- Action Buttons / Status Message -->
+            <Grid Grid.Row="2">
+                <TextBlock x:Name="JobDetailText"
+                           Text="Starting..."
+                           FontSize="10.5"
+                           Foreground="{DynamicResource TextSecondary}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Left" />
+
+                <StackPanel x:Name="ActionButtonsPanel"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Visibility="Collapsed">
+                    <Button Content="Open File"
+                            FontSize="10.5"
+                            Padding="8,3"
+                            Margin="0,0,6,0"
+                            Background="{DynamicResource BgSecondary}"
+                            Foreground="{DynamicResource TextPrimary}"
+                            BorderBrush="{DynamicResource BorderPrimary}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Click="OpenFile_Click" />
+                    
+                    <Button Content="Open Folder"
+                            FontSize="10.5"
+                            Padding="8,3"
+                            Background="{DynamicResource AccentPrimary}"
+                            Foreground="White"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            Click="OpenFolder_Click" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

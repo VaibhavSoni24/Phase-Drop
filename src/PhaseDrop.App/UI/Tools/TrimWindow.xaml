@@ -1,0 +1,137 @@
+<Window x:Class="PhaseDrop.App.UI.Tools.TrimWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Phase Drop — Trim Media"
+        Width="500" Height="400"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BgPrimary}"
+        Foreground="{DynamicResource TextPrimary}"
+        Icon="/Assets/icon.ico"
+        ResizeMode="NoResize">
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+            <TextBlock x:Name="FileTitleText"
+                       Text="video.mp4"
+                       FontSize="17"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimary}" />
+            <TextBlock x:Name="DurationInfoText"
+                       Text="Total Duration: 00:02:45"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- Slider & Timestamps -->
+        <StackPanel Grid.Row="1" Orientation="Vertical">
+            <!-- Timeline Visualization -->
+            <Border Background="{DynamicResource BgSecondary}"
+                    BorderBrush="{DynamicResource BorderPrimary}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Height="44"
+                    Margin="0,0,0,16"
+                    Padding="8">
+                <Grid>
+                    <ProgressBar x:Name="TimelineProgress"
+                                 Height="8"
+                                 Background="{DynamicResource BgElevated}"
+                                 Foreground="{DynamicResource AccentPrimary}"
+                                 BorderThickness="0"
+                                 VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Start Slider -->
+            <TextBlock Text="Start Timestamp" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4" />
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="90" />
+                </Grid.ColumnDefinitions>
+
+                <Slider x:Name="StartSlider"
+                        Minimum="0" Maximum="100" Value="0"
+                        VerticalAlignment="Center"
+                        ValueChanged="StartSlider_ValueChanged" />
+
+                <TextBox x:Name="StartTimeBox"
+                         Grid.Column="1"
+                         Height="28"
+                         Text="00:00:00"
+                         FontSize="12"
+                         FontFamily="Consolas"
+                         TextAlignment="Center"
+                         Padding="4,2"
+                         Background="{DynamicResource BgSecondary}"
+                         Foreground="{DynamicResource TextPrimary}"
+                         BorderBrush="{DynamicResource BorderPrimary}"
+                         Margin="8,0,0,0"
+                         TextChanged="StartTimeBox_TextChanged" />
+            </Grid>
+
+            <!-- End Slider -->
+            <TextBlock Text="End Timestamp" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4" />
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="90" />
+                </Grid.ColumnDefinitions>
+
+                <Slider x:Name="EndSlider"
+                        Minimum="0" Maximum="100" Value="100"
+                        VerticalAlignment="Center"
+                        ValueChanged="EndSlider_ValueChanged" />
+
+                <TextBox x:Name="EndTimeBox"
+                         Grid.Column="1"
+                         Height="28"
+                         Text="00:02:45"
+                         FontSize="12"
+                         FontFamily="Consolas"
+                         TextAlignment="Center"
+                         Padding="4,2"
+                         Background="{DynamicResource BgSecondary}"
+                         Foreground="{DynamicResource TextPrimary}"
+                         BorderBrush="{DynamicResource BorderPrimary}"
+                         Margin="8,0,0,0"
+                         TextChanged="EndTimeBox_TextChanged" />
+            </Grid>
+
+            <!-- Trim Output Duration summary -->
+            <TextBlock x:Name="TrimSummaryText"
+                       Text="Output Duration: 00:02:45"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentPrimary}" />
+        </StackPanel>
+
+        <!-- Actions -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Cancel"
+                    Padding="16,6"
+                    Margin="0,0,10,0"
+                    Background="{DynamicResource BgSecondary}"
+                    Foreground="{DynamicResource TextPrimary}"
+                    BorderBrush="{DynamicResource BorderPrimary}"
+                    BorderThickness="1"
+                    Click="Cancel_Click" />
+
+            <Button Content="Apply &amp; Trim"
+                    Padding="18,6"
+                    Background="{DynamicResource AccentPrimary}"
+                    Foreground="White"
+                    FontWeight="SemiBold"
+                    BorderThickness="0"
+                    Click="Apply_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

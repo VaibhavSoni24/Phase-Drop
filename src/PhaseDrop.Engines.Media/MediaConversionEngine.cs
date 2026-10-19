@@ -38,6 +38,49 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         return SupportedOperationIds.Contains(operation.Id);
     }
 
+    public async Task<TimeSpan?> ProbeDurationAsync(string filePath)
+    {
+        string? binary = _ffprobePath ?? _ffmpegPath;
+        if (string.IsNullOrEmpty(binary) || !File.Exists(binary) || !File.Exists(filePath))
+            return null;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = binary,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(filePath);
+
+            using var process = Process.Start(psi);
+            if (process == null) return null;
+
+            string stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            var match = Regex.Match(stderr, @"Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)");
+            if (match.Success &&
+                int.TryParse(match.Groups[1].Value, out int hours) &&
+                int.TryParse(match.Groups[2].Value, out int minutes) &&
+                double.TryParse(match.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
+            {
+                return TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
+            }
+        }
+        catch
+        {
+            // Ignore probe exceptions
+        }
+
+        return null;
+    }
+
     public async Task<JobResult> ExecuteAsync(ConversionJob job, IProgress<JobProgress> progress, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(_ffmpegPath) || !File.Exists(_ffmpegPath))
