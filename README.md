@@ -48,7 +48,7 @@ Hold **Ctrl + Shift** while dragging to switch the wheel to **Contextual Tools M
 * **Images:** Crop with interactive handles, Resize, Compress, Strip EXIF, Convert to PDF.
 * **Videos:** Trim clip, Compress, Extract Audio, Convert to GIF, Change Speed.
 * **Audio:** Trim, Change Bitrate, Volume Normalize.
-* **PDFs:** Merge, Split, Extract Pages, Rotate Pages, Export Pages to Images.
+* **PDFs:** Merge multiple PDFs, Split into individual pages, Extract page ranges, Rotate pages, Strip metadata.
 * **Archives:** Create `.zip`, `.7z`, or `.tar.gz` with selectable compression levels.
 
 ---
@@ -60,7 +60,7 @@ Hold **Ctrl + Shift** while dragging to switch the wheel to **Contextual Tools M
 | **Images** | PNG, JPG, JPEG, WebP, BMP, GIF, TIFF, ICO, SVG | PNG, JPG, WebP, BMP, GIF, TIFF, ICO, PDF | Interactive Crop, Resize, Rotate, Flip, Compress, Strip Metadata |
 | **Video** | MP4, MOV, MKV, WebM, AVI, WMV, FLV | MP4, WebM, MKV, MOV, AVI, GIF, MP3, WAV | Interactive Trim, Compress, Audio Strip, GIF Maker, Thumbnail |
 | **Audio** | MP3, WAV, FLAC, AAC, M4A, OGG, Opus, WMA | MP3, WAV, FLAC, AAC, M4A, OGG, Opus | Trim, Bitrate Adjust, Volume Normalization |
-| **PDF** | PDF | PDF, PNG, JPG | Merge, Split, Page Extraction, Page Rotation, Image to PDF |
+| **PDF** | PDF | PDF, ZIP (archive), 7Z (archive) | Merge, Split, Page Extraction, Page Rotation, Strip Info |
 | **Archives** | ZIP, 7Z, TAR, GZ, TGZ, RAR (Extract only) | ZIP, 7Z, TAR, GZ, TGZ | Compress Folder/Files, Safe Extract, Format Transcode, Integrity Test |
 | **Documents**| CSV, TSV, TXT, JSON, HTML, MD | CSV, TSV, TXT, JSON, HTML, MD, PDF | Table Conversion, Markdown to HTML, Text to PDF |
 

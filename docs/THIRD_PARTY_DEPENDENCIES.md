@@ -16,13 +16,13 @@ All third-party libraries, packages, and executables redistributed with or refer
 ## 2. Bundled Native Executables
 
 ### FFmpeg & FFprobe
-* **Version:** 8.0.1+
-* **Publisher:** FFmpeg Project
-* **License:** GNU Lesser General Public License (LGPL) v2.1+ / GNU General Public License (GPL) v3.0+
+* **Version:** 9.0.2+ / 8.0.1+ (Windows x64 Full Build)
+* **Publisher:** FFmpeg Project / Gyan.dev
+* **License:** GNU General Public License (GPL) v3.0+ (GPL-3.0-or-later enabled via `--enable-gpl --enable-version3`)
 * **URL:** [https://ffmpeg.org](https://ffmpeg.org)
 * **Redistribution Location:** `engines/media/ffmpeg.exe`, `engines/media/ffprobe.exe`
-* **Justification:** Industry-standard audio/video decoding, transcoding, demuxing, filtering, and stream analysis. Bundling standard builds ensures end users never need to install codecs or package managers manually.
-* **Compliance:** Source code availability and full license notices are shipped alongside the binaries in `THIRD-PARTY-NOTICES.md` in accordance with LGPL/GPL obligations.
+* **Justification:** Industry-standard audio/video decoding, transcoding, demuxing, filtering, and stream analysis. Bundling deterministic builds ensures end users never need to install codecs or package managers manually.
+* **Compliance:** The bundled distribution is compiled under GPL-3.0-or-later (enabling x264/x265 codecs), which is copyleft-compatible with Phase Drop's GPL-3.0 license. Upstream source code repository links, build flags, and notices are provided in `THIRD-PARTY-NOTICES.md`.
 
 ---
 

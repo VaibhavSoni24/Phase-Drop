@@ -38,21 +38,30 @@ SOFTWARE.
 ---
 
 ## 2. FFmpeg & FFprobe
-* **Project:** FFmpeg
+* **Project:** FFmpeg & FFprobe
 * **Copyright:** (c) 2000-2026 the FFmpeg developers
-* **License:** GNU Lesser General Public License (LGPL) version 2.1 or later / GNU General Public License (GPL) version 3.0 or later
-* **Source Code:** [https://ffmpeg.org](https://ffmpeg.org)
+* **Distribution Build:** Gyan.dev Windows Full Build (ffmpeg-release-full.7z)
+* **License:** GNU General Public License (GPL) version 3.0 or later
+* **Source Code:** [https://ffmpeg.org](https://ffmpeg.org) and [https://github.com/GyanD/codexffmpeg](https://github.com/GyanD/codexffmpeg)
 
 ```
 FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
-FFmpeg is licensed under the GNU Lesser General Public License (LGPL) version 2.1 or later.
-However, FFmpeg incorporates several optional parts and optimizations that are covered by the
-GNU General Public License (GPL) version 2 or later. If those parts get used the GPL applies
-to the whole package.
 
-This distribution of Phase Drop bundles unmodified, statically compiled FFmpeg binaries.
-The source code for FFmpeg can be downloaded from https://ffmpeg.org or requested from
-the Phase Drop release page.
+AUDITED BUILD CONFIGURATION:
+The bundled FFmpeg and FFprobe binaries are built with:
+  --enable-gpl --enable-version3 --enable-static --enable-libx264 --enable-libx265
+  --enable-libvpx --enable-libdav1d --enable-libopus --enable-libmp3lame --enable-libvorbis
+
+Because --enable-gpl, --enable-version3, libx264, and libx265 are enabled in this binary distribution,
+the effective license governing the redistributed binary files (ffmpeg.exe and ffprobe.exe) is
+the GNU General Public License (GPL) version 3.0 or later.
+
+Phase Drop itself is licensed under the GNU General Public License version 3.0 (GPL-3.0-or-later),
+which is fully compatible with this bundled FFmpeg distribution. In compliance with the GPL v3:
+1. Complete, corresponding source code for the exact FFmpeg version bundled is accessible upstream
+   at https://ffmpeg.org/download.html and https://github.com/GyanD/codexffmpeg.
+2. Build configurations and instructions are preserved in scripts/acquire-ffmpeg.ps1 and docs/THIRD_PARTY_DEPENDENCIES.md.
+3. Users receive this license notice and full GPL-3.0 text alongside the installer distribution.
 ```
 
 ---

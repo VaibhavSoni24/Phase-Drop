@@ -30,3 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Installer & Packaging:**
   - Full NSIS 3.13 installer with destination selection, theme selection, Start Menu integration, and clean uninstallation.
   - Automated build, test, and packaging scripts in PowerShell.
+
+### Fixed & Hardened
+- **CI/CD & Packaging:**
+  - Repaired GitHub Actions workflow failure caused by missing NSIS in PATH by dynamically appending Chocolatey and ProgramFiles NSIS directories.
+  - Eliminated all machine-specific paths (e.g. `C:\Users\shubh`, `D:\Softwares`, `C:\Program Files\dotnet\dotnet.exe`) across all packaging and CI scripts.
+  - Replaced WinGet scans with deterministic FFmpeg acquisition and verification script (`scripts/acquire-ffmpeg.ps1`).
+  - Added PE header check, size plausibility (>50MB), SHA-256 validation, and live binary `--version` checks in `scripts/validate-release.ps1`.
+- **Engine Correctness:**
+  - Implemented RFC 4180 compliant CSV state machine handling quoted delimiters, embedded newlines, escaped quotes (`""`), and UTF-8 BOM.
+  - Enforced deterministic JSON-to-CSV header discovery and HTML entity escaping on user-provided data.
+  - Added explicit encoder validation for images (rejecting unsupported extensions with `NotSupportedException`) and alpha transparency flattening onto white background for JPEG.
+  - Hardened archive extraction with canonical destination path checks, Zip-Slip traversal rejection, and automatic cleanup of partial output on failure.
+  - Reconciled PDF registry to honestly reflect capabilities (removed placeholder PDF-to-image rasterization; provided archive options).
+  - Hardened user settings with atomic persistence (`.tmp` to target move) and corrupted settings fallback with automated backup.
