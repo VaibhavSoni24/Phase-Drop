@@ -1,0 +1,57 @@
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build Results
+[Bb]in/
+[Oo]bj/
+out/
+publish/
+dist/
+release/
+*.nupkg
+*.snupkg
+
+# .NET Artifacts
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test and Profiling
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Log and Temp files
+*.log
+*.tmp
+logs/
+temp/
+scratch/
+
+# NSIS Packaging intermediate outputs
+packaging/nsis/Output/
+packaging/nsis/*.exe
+!packaging/nsis/*.nsi
+
+# Exclude original raw root logo once moved
+Phase Drop Logo.png
