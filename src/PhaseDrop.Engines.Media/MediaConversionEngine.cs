@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using PhaseDrop.Core.IO;
@@ -81,8 +82,44 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         return null;
     }
 
+    public async Task<bool> HasAudioStreamAsync(string filePath)
+    {
+        string? binary = _ffprobePath ?? _ffmpegPath;
+        if (string.IsNullOrEmpty(binary) || !File.Exists(binary) || !File.Exists(filePath))
+            return false;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = binary,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(filePath);
+
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+
+            string stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            return stderr.Contains("Audio:", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<JobResult> ExecuteAsync(ConversionJob job, IProgress<JobProgress> progress, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrEmpty(_ffmpegPath) || !File.Exists(_ffmpegPath))
         {
             throw new FileNotFoundException("FFmpeg media processing engine binary not found. Please ensure ffmpeg.exe is installed under engines/media/ or present in PATH.");
@@ -106,7 +143,19 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
             try
             {
-                await RunFfmpegAsync(sourcePath, stagingPath, job.Operation, job.Parameters, progress, i, total, cancellationToken);
+                // Probe total media duration for accurate progress tracking
+                var duration = await ProbeDurationAsync(sourcePath);
+                double totalSeconds = (duration.HasValue && duration.Value.TotalSeconds > 0) ? duration.Value.TotalSeconds : 60.0;
+
+                await RunFfmpegAsync(sourcePath, stagingPath, job.Operation, job.Parameters, totalSeconds, progress, i, total, cancellationToken);
+
+                // Verify output non-empty
+                var fi = new FileInfo(stagingPath);
+                if (!fi.Exists || fi.Length == 0)
+                {
+                    throw new InvalidOperationException($"Conversion produced an empty or missing output file: {Path.GetFileName(stagingPath)}");
+                }
+
                 CollisionSafeWriter.CommitStagingFile(stagingPath, outputPath);
                 outputFiles.Add(outputPath);
             }
@@ -124,25 +173,15 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
     private static string GetTargetExtension(FileOperation operation, string sourcePath)
     {
+        if (operation.Id.StartsWith("convert:", StringComparison.OrdinalIgnoreCase))
+            return operation.TargetExtension;
+
         return operation.Id switch
         {
-            "convert:mp4" or "tool:compress" => ".mp4",
-            "convert:webm" => ".webm",
-            "convert:mkv" => ".mkv",
-            "convert:mov" => ".mov",
-            "convert:avi" => ".avi",
-            "convert:gif" or "tool:to_gif" => ".gif",
-            "convert:mp3" or "tool:extract_audio" => ".mp3",
-            "convert:wav" => ".wav",
-            "convert:flac" => ".flac",
-            "convert:aac" => ".m4a",
-            "convert:ogg" => ".ogg",
-            "convert:opus" => ".opus",
-            "convert:webp" => ".webp",
+            "tool:extract_audio" => ".mp3",
+            "tool:to_gif" => ".gif",
             "tool:thumbnail" => ".png",
-            "tool:trim" => Path.GetExtension(sourcePath),
-            "tool:speed" => Path.GetExtension(sourcePath),
-            "tool:normalize" => Path.GetExtension(sourcePath),
+            "tool:trim" or "tool:compress" or "tool:speed" or "tool:normalize" => Path.GetExtension(sourcePath),
             _ => operation.TargetExtension
         };
     }
@@ -152,6 +191,7 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         string stagingPath,
         FileOperation operation,
         JsonObject? parameters,
+        double totalSeconds,
         IProgress<JobProgress> progress,
         int itemIndex,
         int totalItems,
@@ -248,12 +288,22 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         {
             double speed = parameters?["speed"]?.GetValue<double>() ?? 1.5;
             double pts = 1.0 / speed;
-            psi.ArgumentList.Add("-filter_complex");
-            psi.ArgumentList.Add(FormattableString.Invariant($"[0:v]setpts={pts:F4}*PTS[v];[0:a]atempo={speed:F2}[a]"));
-            psi.ArgumentList.Add("-map");
-            psi.ArgumentList.Add("[v]");
-            psi.ArgumentList.Add("-map");
-            psi.ArgumentList.Add("[a]");
+            bool hasAudio = await HasAudioStreamAsync(sourcePath);
+
+            if (hasAudio)
+            {
+                psi.ArgumentList.Add("-filter_complex");
+                psi.ArgumentList.Add(FormattableString.Invariant($"[0:v]setpts={pts:F4}*PTS[v];[0:a]atempo={speed:F2}[a]"));
+                psi.ArgumentList.Add("-map");
+                psi.ArgumentList.Add("[v]");
+                psi.ArgumentList.Add("-map");
+                psi.ArgumentList.Add("[a]");
+            }
+            else
+            {
+                psi.ArgumentList.Add("-vf");
+                psi.ArgumentList.Add(FormattableString.Invariant($"setpts={pts:F4}*PTS"));
+            }
         }
         else if (operation.Id == "tool:normalize")
         {
@@ -303,7 +353,6 @@ public sealed partial class MediaConversionEngine : IConversionEngine
         psi.ArgumentList.Add(stagingPath);
 
         using var process = new Process { StartInfo = psi };
-        var tcs = new TaskCompletionSource<bool>();
 
         process.ErrorDataReceived += (_, e) =>
         {
@@ -318,7 +367,7 @@ public sealed partial class MediaConversionEngine : IConversionEngine
                 if (TimeSpan.TryParse(timeStr, CultureInfo.InvariantCulture, out var currentPos))
                 {
                     double currentSec = currentPos.TotalSeconds;
-                    double itemRatio = Math.Min(0.99, currentSec / 60.0); // Estimate
+                    double itemRatio = Math.Min(0.99, currentSec / Math.Max(1.0, totalSeconds));
                     double aggregate = ((double)itemIndex / totalItems) + (itemRatio / totalItems);
                     progress.Report(new JobProgress($"Transcoding {Path.GetFileName(sourcePath)} ({timeStr})", aggregate, itemIndex, totalItems, Path.GetFileName(sourcePath)));
                 }
@@ -339,7 +388,6 @@ public sealed partial class MediaConversionEngine : IConversionEngine
             {
                 // Process already terminated
             }
-            tcs.TrySetCanceled(cancellationToken);
         });
 
         await process.WaitForExitAsync(cancellationToken);
@@ -352,37 +400,21 @@ public sealed partial class MediaConversionEngine : IConversionEngine
 
     private static string? LocateBinary(string binaryName)
     {
-        // 1. App-local engines directory
+        // 1. App-local engines directory (packaged mode)
         string localPath = Path.Combine(AppContext.BaseDirectory, "engines", "media", binaryName);
         if (File.Exists(localPath))
             return localPath;
 
-        // 2. PATH search
+        // 2. PATH search (developer / system-wide mode)
         string? pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (!string.IsNullOrEmpty(pathEnv))
         {
             foreach (string part in pathEnv.Split(Path.PathSeparator))
             {
+                if (string.IsNullOrWhiteSpace(part)) continue;
                 string candidate = Path.Combine(part.Trim(), binaryName);
                 if (File.Exists(candidate))
                     return candidate;
-            }
-        }
-
-        // 3. Known WinGet / user location fallback
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string wingetDir = Path.Combine(localAppData, @"Microsoft\WinGet\Packages");
-        if (Directory.Exists(wingetDir))
-        {
-            try
-            {
-                var candidate = Directory.EnumerateFiles(wingetDir, binaryName, SearchOption.AllDirectories).FirstOrDefault();
-                if (candidate != null)
-                    return candidate;
-            }
-            catch
-            {
-                // Ignore search exceptions
             }
         }
 
