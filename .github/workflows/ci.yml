@@ -29,30 +29,58 @@ jobs:
       - name: Install NSIS
         run: |
           choco install nsis -y --no-progress
+          $nsisDir = "${env:ProgramFiles(x86)}\NSIS"
+          if (Test-Path $nsisDir) {
+            $nsisDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Install FFmpeg
         run: |
           choco install ffmpeg -y --no-progress
+          $chocoBin = "$env:ChocolateyInstall\bin"
+          if (Test-Path $chocoBin) {
+            $chocoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Restore Dependencies
         run: |
+          $ErrorActionPreference = "Stop"
           dotnet restore PhaseDrop.sln
 
       - name: Build Solution (Release)
         run: |
+          $ErrorActionPreference = "Stop"
           powershell -File scripts/build.ps1 -Configuration Release
 
       - name: Run Test Suite
         run: |
+          $ErrorActionPreference = "Stop"
           powershell -File scripts/test.ps1 -Configuration Release
 
-      - name: Package Windows Installer
+      - name: Extract Release Version
+        id: get_version
+        shell: pwsh
         run: |
-          powershell -File scripts/package.ps1 -Configuration Release -Version "1.0.0"
+          $ref = "${{ github.ref_name }}"
+          if ($ref -match '^v(\d+\.\d+\.\d+.*)$') {
+            $ver = $matches[1]
+          } else {
+            $ver = "1.0.0"
+          }
+          Write-Host "Configured package version: $ver"
+          "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Package Windows Installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          powershell -File scripts/package.ps1 -Configuration Release -Version "${{ steps.get_version.outputs.version }}"
 
       - name: Validate Release Package
+        shell: pwsh
         run: |
-          powershell -File scripts/validate-release.ps1 -Version "1.0.0"
+          $ErrorActionPreference = "Stop"
+          powershell -File scripts/validate-release.ps1 -Version "${{ steps.get_version.outputs.version }}"
 
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4

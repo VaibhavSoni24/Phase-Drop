@@ -5,24 +5,77 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = "Release",
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.0.0",
+    [string]$FfmpegDir = "",
+    [string]$NsisPath = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path "$PSScriptRoot\.."
-$dotnetPath = "C:\Program Files\dotnet\dotnet.exe"
-$nsisPath = "D:\Softwares\NSIS\makensis.exe"
-$publishDir = "$repoRoot\artifacts\publish"
-$distDir = "$repoRoot\dist"
+$repoRoot = (Resolve-Path "$PSScriptRoot\..").Path
+$publishDir = Join-Path $repoRoot "artifacts\publish"
+$distDir = Join-Path $repoRoot "dist"
 
 Write-Host "=== Phase Drop Release Packaging Pipeline ===" -ForegroundColor Cyan
 Write-Host "Version:       $Version"
 Write-Host "Configuration: $Configuration"
+Write-Host "Repository:    $repoRoot"
 Write-Host "Publish Dir:   $publishDir"
 Write-Host "Dist Dir:      $distDir`n"
 
-# 1. Clean previous artifacts
+# 1. Resolve .NET CLI
+$dotnetCmd = "dotnet"
+$foundDotnet = Get-Command $dotnetCmd -ErrorAction SilentlyContinue
+if (-not $foundDotnet) {
+    if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT) -and (Test-Path "$env:DOTNET_ROOT\dotnet.exe")) {
+        $dotnetCmd = "$env:DOTNET_ROOT\dotnet.exe"
+    } elseif (Test-Path "$env:ProgramFiles\dotnet\dotnet.exe") {
+        $dotnetCmd = "$env:ProgramFiles\dotnet\dotnet.exe"
+    } else {
+        Write-Error "The .NET CLI (dotnet) was not found in PATH or standard installation directories. Please install .NET 10 SDK."
+        exit 1
+    }
+} else {
+    $dotnetCmd = $foundDotnet.Source
+}
+Write-Host "Using .NET CLI: $dotnetCmd"
+
+# 2. Resolve NSIS Compiler (makensis.exe)
+$nsisExe = $NsisPath
+if ([string]::IsNullOrWhiteSpace($nsisExe) -or -not (Test-Path $nsisExe)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:NSIS_PATH) -and (Test-Path $env:NSIS_PATH)) {
+        $nsisExe = $env:NSIS_PATH
+    } elseif (-not [string]::IsNullOrWhiteSpace($env:NSIS_DIR) -and (Test-Path "$env:NSIS_DIR\makensis.exe")) {
+        $nsisExe = "$env:NSIS_DIR\makensis.exe"
+    }
+}
+if ([string]::IsNullOrWhiteSpace($nsisExe) -or -not (Test-Path $nsisExe)) {
+    $nsisCmd = Get-Command makensis.exe -ErrorAction SilentlyContinue
+    if ($nsisCmd) {
+        $nsisExe = $nsisCmd.Source
+    } else {
+        $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            "$env:ChocolateyInstall\bin\makensis.exe",
+            "$env:LOCALAPPDATA\Programs\NSIS\makensis.exe"
+        )
+        foreach ($c in $candidates) {
+            if (-not [string]::IsNullOrWhiteSpace($c) -and (Test-Path $c)) {
+                $nsisExe = $c
+                break
+            }
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($nsisExe) -or -not (Test-Path $nsisExe)) {
+    Write-Error "NSIS compiler (makensis.exe) was not found in PATH or standard directories. Please install NSIS 3.13+ via 'choco install nsis' or pass -NsisPath."
+    exit 1
+}
+Write-Host "Using NSIS Compiler: $nsisExe"
+
+# 3. Clean previous artifacts
 if (Test-Path $publishDir) {
     Remove-Item -Recurse -Force $publishDir
 }
@@ -30,11 +83,12 @@ if (-not (Test-Path $distDir)) {
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 }
 
-# 2. Self-contained .NET 10 publish
-Write-Host "[1/5] Publishing self-contained win-x64 application..." -ForegroundColor Yellow
+# 4. Self-contained .NET 10 publish
+Write-Host "`n[1/5] Publishing self-contained win-x64 application..." -ForegroundColor Yellow
+$appCsproj = Join-Path $repoRoot "src\PhaseDrop.App\PhaseDrop.App.csproj"
 $publishArgs = @(
     "publish",
-    "$repoRoot\src\PhaseDrop.App\PhaseDrop.App.csproj",
+    $appCsproj,
     "-c", $Configuration,
     "-r", "win-x64",
     "--self-contained", "true",
@@ -43,70 +97,61 @@ $publishArgs = @(
     "-o", $publishDir
 )
 
-& $dotnetPath @publishArgs
+& $dotnetCmd @publishArgs
 if ($LASTEXITCODE -ne 0) {
     Write-Error "dotnet publish failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE
 }
 
-# 3. Bundle Engines (FFmpeg & FFprobe)
-Write-Host "[2/5] Bundling conversion engines..." -ForegroundColor Yellow
-$enginesMediaDir = "$publishDir\engines\media"
-New-Item -ItemType Directory -Path $enginesMediaDir -Force | Out-Null
+# 5. Bundle Conversion Engines (FFmpeg & FFprobe)
+Write-Host "`n[2/5] Bundling media processing engines..." -ForegroundColor Yellow
+$enginesMediaDir = Join-Path $publishDir "engines\media"
+$acquireScript = Join-Path $repoRoot "scripts\acquire-ffmpeg.ps1"
 
-$wingetFfmpegDir = "C:\Users\shubh\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin"
-if (Test-Path "$wingetFfmpegDir\ffmpeg.exe") {
-    Copy-Item "$wingetFfmpegDir\ffmpeg.exe" "$enginesMediaDir\ffmpeg.exe" -Force
-    Copy-Item "$wingetFfmpegDir\ffprobe.exe" "$enginesMediaDir\ffprobe.exe" -Force
-    Write-Host "Bundled FFmpeg and FFprobe from WinGet package." -ForegroundColor Green
-} else {
-    Write-Warning "Local FFmpeg binary not found at $wingetFfmpegDir. Searching system PATH..."
-    $ffmpegCmd = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
-    $ffprobeCmd = Get-Command ffprobe.exe -ErrorAction SilentlyContinue
-    if ($ffmpegCmd -and $ffprobeCmd) {
-        Copy-Item $ffmpegCmd.Source "$enginesMediaDir\ffmpeg.exe" -Force
-        Copy-Item $ffprobeCmd.Source "$enginesMediaDir\ffprobe.exe" -Force
-        Write-Host "Bundled FFmpeg and FFprobe from PATH." -ForegroundColor Green
-    } else {
-        Write-Warning "FFmpeg binaries could not be bundled. Installer will proceed with managed-only processing engines."
-    }
+$acquireArgs = @{
+    DestinationDir = $enginesMediaDir
+}
+if (-not [string]::IsNullOrWhiteSpace($FfmpegDir)) {
+    $acquireArgs["SourceDir"] = $FfmpegDir
 }
 
-# 4. Copy Notice and License assets
-Write-Host "[3/5] Copying legal notices and assets..." -ForegroundColor Yellow
-Copy-Item "$repoRoot\LICENSE" "$publishDir\LICENSE" -Force
-Copy-Item "$repoRoot\THIRD-PARTY-NOTICES.md" "$publishDir\THIRD-PARTY-NOTICES.md" -Force
-Copy-Item "$repoRoot\README.md" "$publishDir\README.md" -Force
+& $acquireScript @acquireArgs
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Media engine acquisition failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
+}
 
-$assetsDir = "$publishDir\Assets"
+# 6. Copy Legal Notices, Documentation, and Assets
+Write-Host "`n[3/5] Copying legal notices and branding assets..." -ForegroundColor Yellow
+Copy-Item (Join-Path $repoRoot "LICENSE") (Join-Path $publishDir "LICENSE") -Force
+Copy-Item (Join-Path $repoRoot "THIRD-PARTY-NOTICES.md") (Join-Path $publishDir "THIRD-PARTY-NOTICES.md") -Force
+Copy-Item (Join-Path $repoRoot "README.md") (Join-Path $publishDir "README.md") -Force
+
+$assetsDir = Join-Path $publishDir "Assets"
 New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
-Copy-Item "$repoRoot\assets\branding\icon.ico" "$assetsDir\icon.ico" -Force
-Copy-Item "$repoRoot\assets\branding\logo.png" "$assetsDir\logo.png" -Force
+Copy-Item (Join-Path $repoRoot "assets\branding\icon.ico") (Join-Path $assetsDir "icon.ico") -Force
+Copy-Item (Join-Path $repoRoot "assets\branding\logo.png") (Join-Path $assetsDir "logo.png") -Force
 
-# 5. Compile NSIS Installer
-Write-Host "[4/5] Compiling NSIS Installer..." -ForegroundColor Yellow
-if (-not (Test-Path $nsisPath)) {
-    $nsisCmd = Get-Command makensis.exe -ErrorAction SilentlyContinue
-    if ($nsisCmd) {
-        $nsisPath = $nsisCmd.Source
-    } else {
-        Write-Error "makensis.exe not found at $nsisPath or in PATH."
-        exit 1
-    }
-}
+# 7. Compile NSIS Installer
+Write-Host "`n[4/5] Compiling NSIS Installer..." -ForegroundColor Yellow
+$nsiScript = Join-Path $repoRoot "packaging\nsis\phasedrop.nsi"
+$nsisArgs = @(
+    "/V3",
+    "/DPRODUCT_VERSION=$Version",
+    $nsiScript
+)
 
-$nsiScript = "$repoRoot\packaging\nsis\phasedrop.nsi"
-& $nsisPath "/V3" $nsiScript
+& $nsisExe @nsisArgs
 if ($LASTEXITCODE -ne 0) {
     Write-Error "NSIS compilation failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE
 }
 
-# 6. Verify & Checksum
-Write-Host "[5/5] Generating cryptographic verification checksums..." -ForegroundColor Yellow
-$installerPath = "$distDir\PhaseDrop-Setup-v$Version-x64.exe"
+# 8. Verify & Checksum
+Write-Host "`n[5/5] Generating cryptographic verification checksums..." -ForegroundColor Yellow
+$installerPath = Join-Path $distDir "PhaseDrop-Setup-v$Version-x64.exe"
 if (-not (Test-Path $installerPath)) {
-    Write-Error "Expected installer not found at $installerPath"
+    Write-Error "Expected installer was not generated at: $installerPath"
     exit 1
 }
 

@@ -7,13 +7,22 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$env:PATH = "C:\Program Files\dotnet;$env:PATH"
+$dotnetCmd = if (Get-Command "dotnet" -ErrorAction SilentlyContinue) {
+    "dotnet"
+} elseif (Test-Path "$env:ProgramFiles\dotnet\dotnet.exe") {
+    "$env:ProgramFiles\dotnet\dotnet.exe"
+} else {
+    Write-Error "Prerequisite missing: .NET CLI ('dotnet') was not found in PATH or standard ProgramFiles directory."
+    exit 1
+}
 
 Write-Host "=== Running Phase Drop Tests ($Configuration) ===" -ForegroundColor Cyan
-dotnet test PhaseDrop.sln -c $Configuration --no-build --nologo --verbosity normal
+Write-Host "Using .NET CLI: $dotnetCmd" -ForegroundColor Gray
+& $dotnetCmd test PhaseDrop.sln -c $Configuration --no-build --nologo --verbosity normal
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Tests failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
 } else {
     Write-Host "All tests passed successfully!" -ForegroundColor Green
 }
